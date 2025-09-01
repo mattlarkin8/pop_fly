@@ -5,6 +5,8 @@ from importlib.metadata import PackageNotFoundError, version as pkg_version
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from ..core import Result, compute_distance_bearing_xy
@@ -95,3 +97,13 @@ def main() -> None:
 
 if __name__ == "__main__":  # pragma: no cover
     main()
+
+# Mount static frontend if built (after defining routes so /api takes precedence)
+try:
+    project_root = Path(__file__).resolve().parents[3]
+    dist_dir = project_root / "frontend" / "dist"
+    if dist_dir.is_dir():
+        app.mount("/", StaticFiles(directory=dist_dir, html=True), name="frontend")
+except Exception:
+    # Ignore static mounting failures; API still works
+    pass

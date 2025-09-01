@@ -23,3 +23,6 @@ Outputs:
 
 Note: By default on Windows, settings are stored under %APPDATA%/Mortar Calc/config.json.
 You can override the location for tests via MORTAR_CALC_CONFIG_DIR.
+
+Web UI (local) — after installing web extras and building the frontend, run:
+- mortar-calc-web, then open http://127.0.0.1:8000/
