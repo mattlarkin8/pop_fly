@@ -19,9 +19,16 @@ classifiers = [
 
 [project.scripts]
 mortar-calc = "mortar_calc.cli:main"
+mortar-calc-web = "mortar_calc.web.app:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[project.optional-dependencies]
+web = [
+  "fastapi>=0.110",
+  "uvicorn>=0.22",
+]
