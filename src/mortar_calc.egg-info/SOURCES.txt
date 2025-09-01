@@ -7,4 +7,10 @@ src/mortar_calc.egg-info/PKG-INFO
 src/mortar_calc.egg-info/SOURCES.txt
 src/mortar_calc.egg-info/dependency_links.txt
 src/mortar_calc.egg-info/entry_points.txt
+src/mortar_calc.egg-info/requires.txt
 src/mortar_calc.egg-info/top_level.txt
+src/mortar_calc/web/__init__.py
+src/mortar_calc/web/app.py
+tests/test_api.py
+tests/test_cli.py
+tests/test_core.py

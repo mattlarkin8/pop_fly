@@ -1,2 +1,3 @@
 [console_scripts]
 mortar-calc = mortar_calc.cli:main
+mortar-calc-web = mortar_calc.web.app:main
