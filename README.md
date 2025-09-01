@@ -1,13 +1,13 @@
 # Mortar Calc
 
-Distance and azimuth calculator for local XY (+optional Z) grids.
+Distance and azimuth calculator for local MGRS digits (+optional Z) grids.
 
 Quick usage (after installing into a Python 3.11+ env):
 
-- Set a default start:
-  mortar-calc --set-start "100,200,5"
+- Set a default start (MGRS digits):
+  mortar-calc --set-start "037,050,5"
 - Compute between two points (uses saved start when --start omitted):
-  mortar-calc --end "150 300"
+  mortar-calc --end "051 070"
 - JSON output:
   mortar-calc --end "150 300" --json
 - Show/Clear persisted start:
@@ -15,7 +15,7 @@ Quick usage (after installing into a Python 3.11+ env):
   mortar-calc --clear-start
 
 Inputs:
-- Quoted tuples: "E,N" or "E,N,Z" (comma or space separator)
+- Quoted tuples: "EEE,NNN" or "EEE,NNN,Z" where E/N are 1–5 digit MGRS digits (comma or space separator). Digits are expanded to meters: e.g., 037 → 3700 m, 051 → 5100 m. Z is meters.
 - Units: meters; azimuth output in NATO mils (6400 mils/circle)
 
 Outputs:

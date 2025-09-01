@@ -7,7 +7,7 @@ Date: 2025-09-01
 ## summary
 A Python-based calculator for distance and direction between two points on a local XY grid, now with a local web UI and an HTTP API. Scope remains intentionally narrow: input is XY only (with optional elevation Z in meters); computation is planar Euclidean; output distance is meters; direction is NATO mils (6400 mils per circle). When both start and end elevations are provided, the tool also reports slant distance and delta Z. The tool assumes grid north equals true north for azimuth reporting.
 
-Components:
+Components: 
 - Library: pure Python core function for calculations.
 - CLI: existing command-line tool.
 - Web: local-only FastAPI backend exposing a small API and serving a React + TypeScript + React-Bootstrap single-page app.
@@ -17,7 +17,7 @@ Components:
 - Provide a fast, offline CLI, a local-only HTTP API, and a small Python API for reuse.
 - Offer robust validation and helpful error messages across CLI, API, and Web UI.
 
-## stretch goals
+## stretch goals 
 - Optional packaging into a single executable for easy distribution.
 - Docker packaging for the API + static UI.
 - Map or visual aids in the Web UI (out of scope for this release).
@@ -30,13 +30,13 @@ Example scenarios:
 - Given two XY points in meters on the same local grid, compute distance and azimuth (mils).
 - Given two XY points with elevations, compute horizontal distance, azimuth (mils), slant distance, and delta Z.
 
-## scope
+## scope 
 - Input format: XY (meters) only; +x is east, +y is north; optional Z (meters) for elevation.
 - Output: distance in meters; azimuth in NATO mils (grid). If Z present for both points, also output slant distance (m) and delta Z (m).
 - Interfaces: CLI, importable Python function, local HTTP API, and a Web UI served by the backend.
 - Accuracy target: ≤2 m error for distances ≤4 km under typical conditions.
 
-## functional requirements
+## functional requirements 
 1. input handling (all interfaces)
   - Units: meters (floats). No implicit scaling.
   - Format: XY pairs with optional Z as floats.
@@ -49,7 +49,7 @@ Example scenarios:
   - Bearing (deg): `(atan2(dx, dy) * 180/pi + 360) % 360` (north-referenced; grid assumed ≡ true).
   - Direction output (mils): `azimuth_mils = deg * 6400 / 360`.
 
-3. output (all interfaces)
+3. output (all interfaces) 
   - Human-readable (no elevation): `Distance: 1234 m | Azimuth: 2190 mils`.
   - Human-readable (with elevation): `Distance: 1234 m | Azimuth: 2190 mils | Slant: 1250 m | ΔZ: +80 m`.
   - ΔZ presentation: always include an explicit sign prefix (+/-) in human-readable output.
@@ -72,7 +72,7 @@ Example scenarios:
     - `mortar-calc --start "1000,2000" --end "1500,3200"` (horizontal only)
     - `mortar-calc --start "1000,2000,50" --end "1500,3200,130"` (horizontal + slant)
 
-5. http api (new)
+5. http api (new) 
   - Framework: FastAPI; bind local-only (127.0.0.1:8000).
   - Endpoints:
     - `POST /api/compute` → request `{ start: [..], end: [..], precision?: int }` → response JSON as described above with rounding.
@@ -81,7 +81,7 @@ Example scenarios:
   - Validation: start and end must be arrays of length 2 or 3; values must be finite floats; 400 on invalid input.
   - Static hosting: production build of the frontend served at `/` and assets at `/assets/*` by FastAPI.
 
-6. web ui (new)
+6. web ui (new) 
   - Stack: React + TypeScript + Vite + React-Bootstrap (Bootstrap 5 CSS).
   - Functionality:
     - Inputs for Start (E,N,[Z]) and End (E,N,[Z]).
@@ -92,7 +92,7 @@ Example scenarios:
   - ΔZ formatting: explicit `+/-` sign when both Z values are present.
   - Dev flow: Vite dev server proxies `/api/*` to FastAPI; prod build is served by FastAPI.
 
-7. library api (existing)
+7. library api (existing) 
   - Function: `compute_distance_bearing_xy(start: tuple[float, float] | tuple[float, float, float], end: tuple[float, float] | tuple[float, float, float]) -> Result`
   - Result dataclass:
     - `distance_m: float` (horizontal)
@@ -108,19 +108,19 @@ Example scenarios:
 - Maintainability: compact, well-tested code with minimal dependencies; frontend kept simple.
 - Security: local-only server (bind 127.0.0.1), no auth, no CORS in production (same-origin).
 
-## assumptions
+## assumptions 
 - 2D horizontal distance is always computed; elevation is optional and only used for slant distance when both Z values are present.
 - Local grid axes: +x east, +y north.
 - Grid north is assumed equal to true north; azimuths are reported as grid and treated as true for this tool.
 - Distances ≤ ~4 km so planar approximation is appropriate.
  - Web server is used locally on a developer/operator machine; not exposed publicly.
 
-## constraints
+## constraints 
 - Offline-only at runtime (no external services). Package installation may fetch dependencies during setup.
 - No external CRS libraries required for core XY mode.
 - No database for this phase; Web UI persistence is browser localStorage only.
 
-## design
+## design 
 ### coordinate parsing (XY only)
 - Parse `E,N` pairs (and optional `Z`) into floats across CLI, API, and Web.
 - Validate finite numeric values in all interfaces.
@@ -143,53 +143,53 @@ Example scenarios:
 - Dev mode uses Vite dev server with proxy to FastAPI for `/api/*`.
 - Persistence for default start in Web UI uses browser localStorage only.
 
-## dependencies
+## dependencies 
 - Core/CLI: standard library only (`math`, `argparse`, `json`, `dataclasses`, `typing`, `pathlib`, `os`).
 - Backend (web optional): `fastapi`, `uvicorn`.
 - Frontend: React + TypeScript + Vite, `react-bootstrap`, `bootstrap`.
 
-## cli ux
+## cli ux 
 - Clear usage/help with examples.
 - Echo parsed inputs when `--json` is used.
 - Persisted start storage: platform-appropriate config path (Windows: `%APPDATA%/Mortar Calc/config.json`; macOS: `~/Library/Application Support/Mortar Calc/config.json`; Linux: `$XDG_CONFIG_HOME/mortar-calc/config.json` or `~/.config/mortar-calc/config.json`).
 - When a persisted start exists and `--start` is omitted, use saved start; if neither is present, return a clear error.
 - When a persisted start includes Z and an `--end` with Z is provided, compute slant/ΔZ; otherwise compute horizontal only.
 
-## web ui ux
+## web ui ux 
 - Single-page app with a form: Start (E,N,[Z]), End (E,N,[Z]), precision, Save/Use saved start controls.
 - Results panel renders human-readable output and optional JSON tab.
 - Invalid inputs highlighted with inline messages.
 - Runs at `http://127.0.0.1:8000/` by default.
 
-## validation and testing
+## validation and testing 
 - Unit tests (existing): core computations; CLI behaviors (persistence, formatting).
 - API tests: FastAPI TestClient for happy paths (XY, XY+Z), zero distance, rounding, invalid payloads (400).
 - Frontend tests (optional): light smoke tests for ΔZ sign formatting and form validation.
 - Manual smoke: Web UI save/use start, compute with/without Z, error display, refresh persistence.
 
-## acceptance criteria
+## acceptance criteria 
 - CLI: returns distance (m) and azimuth (mils); with both Z values, returns slant_distance_m and delta_z_m; JSON and human-readable outputs follow rules above; exit code 2 on usage errors; ΔZ sign explicit.
 - API: `POST /api/compute` returns JSON matching the CLI’s JSON structure and rounding; `GET /api/health` and `/api/version` function; invalid inputs return HTTP 400 with message.
 - Web UI: users can enter start/end (with optional Z), set precision, save/use start in localStorage, compute results; human-readable output matches CLI formatting (including signed ΔZ), and optional raw JSON view is correct.
 - Server runs locally at 127.0.0.1:8000 serving both API and static UI in production.
 
-## milestones & timeline
+## milestones & timeline 
 1. Day 1: FastAPI API (`/api/compute`, `/api/health`, `/api/version`) with tests; Vite React TS scaffold; basic API client/types.
 2. Day 2: React-Bootstrap UI (form, validation, localStorage), wiring to API; dev proxy; manual smoke.
 3. Day 3: Production integration (serve static via FastAPI), README updates, polish, optional frontend smoke tests.
 
-## risks & mitigations
+## risks & mitigations 
 - Grid ≡ true north assumption: clearly documented in help/README and UI.
 - Rounding drift between CLI and API: unify rounding rules in backend and test both.
 - Dev-time CORS friction: use Vite proxy to avoid CORS; in production serve same-origin.
 - Scope creep on UI styling: stick to React-Bootstrap defaults and minimal theming.
 
-## appendix: quick formulas
+## appendix: quick formulas 
 - Distance: `sqrt(ΔE^2 + ΔN^2)`
 - Grid bearing (deg): `(atan2(ΔE, ΔN) * 180/π + 360) % 360`
 - NATO mils: `mils = deg * 6400 / 360`
 
-## examples
+## examples 
 - Azimuth: `mortar-calc --start "1000,2000" --end "1500,3200"`
 - Persisted start workflow:
   - `mortar-calc --set-start "1000,2000"`

@@ -1,12 +1,11 @@
 export type ComputeRequest = {
-  start: number[]
-  end: number[]
+  start: (number | string)[]
+  end: (number | string)[]
   precision?: number
-  mode?: 'xy' | 'mgrs-digits'
 }
 
 export type ComputeResponse = {
-  format: 'xy' | 'mgrs-digits'
+  format: 'mgrs-digits'
   start: number[]
   end: number[]
   distance_m: number

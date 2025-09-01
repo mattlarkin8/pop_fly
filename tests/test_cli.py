@@ -26,26 +26,26 @@ class TestCLI(unittest.TestCase):
         return code, buf.getvalue().strip()
 
     def test_set_start_and_compute_plain(self):
-        code, _ = self.run_cli(["--set-start", "100,200"])
+        code, _ = self.run_cli(["--set-start", "00000,00000"])  # origin
         self.assertEqual(code, 0)
-        code, out = self.run_cli(["--end", "150 300", "--precision", "1"])  # uses saved start
+        code, out = self.run_cli(["--end", "03000 00000", "--precision", "1"])  # 3km east
         self.assertEqual(code, 0)
         self.assertIn("Distance:", out)
         self.assertIn("Azimuth:", out)
         self.assertNotIn("ΔZ:", out)
 
     def test_with_z_signed_delta(self):
-        self.assertEqual(self.run_cli(["--set-start", "100,200,5"])[0], 0)
-        code, out = self.run_cli(["--end", "150 300 25", "--precision", "0"])  # 20 m up
+        self.assertEqual(self.run_cli(["--set-start", "00000,00000,5"])[0], 0)
+        code, out = self.run_cli(["--end", "00000 00000 25", "--precision", "0"])  # 20 m up
         self.assertEqual(code, 0)
         self.assertIn("ΔZ: +20 m", out)
 
     def test_json_output(self):
-        self.assertEqual(self.run_cli(["--set-start", "0 0 0"])[0], 0)
-        code, out = self.run_cli(["--end", "3000 0 10", "--json", "--precision", "0"])
+        self.assertEqual(self.run_cli(["--set-start", "00000 00000 0"])[0], 0)
+        code, out = self.run_cli(["--end", "03000 00000 10", "--json", "--precision", "0"])
         self.assertEqual(code, 0)
         data = json.loads(out)
-        self.assertEqual(data["format"], "xy")
+        self.assertEqual(data["format"], "mgrs-digits")
         self.assertEqual(data["start"], [0.0, 0.0, 0.0])
         self.assertEqual(data["end"], [3000.0, 0.0, 10.0])
         self.assertEqual(data["distance_m"], 3000)
