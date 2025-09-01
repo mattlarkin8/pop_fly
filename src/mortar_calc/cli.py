@@ -8,7 +8,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Tuple
 
-from .core import Result, _parse_pair, compute_distance_bearing_xy
+from .core import Result, _parse_pair, _parse_pair_mgrs_digits, compute_distance_bearing_xy
 
 
 APP_NAME = "Mortar Calc"
@@ -68,7 +68,7 @@ def _format_signed(value: float, precision: int = 0) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="mortar-calc", description="Distance and azimuth calculator (XY[Z])")
+    parser = argparse.ArgumentParser(prog="mortar-calc", description="Distance and azimuth calculator (XY[Z]) or MGRS-digit shorthand")
     parser.add_argument("--start", type=str, help="Quoted 'E,N' or 'E,N,Z'", required=False)
     parser.add_argument("--end", type=str, help="Quoted 'E,N' or 'E,N,Z'", required=False)
     parser.add_argument("--set-start", dest="set_start", type=str, help="Persist a default start 'E,N' or 'E,N,Z'", required=False)
@@ -76,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--show-start", action="store_true", help="Show persisted start if present")
     parser.add_argument("--json", action="store_true", help="Output JSON")
     parser.add_argument("--precision", type=int, default=0, help="Decimal places for distances (default 0); azimuth mils uses 1")
+    parser.add_argument("--mode", choices=["xy", "mgrs-digits"], default="xy", help="Input mode: 'xy' meters (default) or 'mgrs-digits' (e.g., '037,050' -> 3700, 5000 m)")
 
     args = parser.parse_args(argv)
 
@@ -94,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.set_start:
         try:
-            start = _parse_pair(args.set_start)
+            start = _parse_pair_mgrs_digits(args.set_start) if args.mode == "mgrs-digits" else _parse_pair(args.set_start)
         except Exception as e:
             print(f"Error: {e}")
             return 2
@@ -107,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.start:
         try:
-            start_tuple = _parse_pair(args.start)
+            start_tuple = _parse_pair_mgrs_digits(args.start) if args.mode == "mgrs-digits" else _parse_pair(args.start)
         except Exception as e:
             print(f"Error: {e}")
             return 2
@@ -116,7 +117,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.end:
         try:
-            end_tuple = _parse_pair(args.end)
+            end_tuple = _parse_pair_mgrs_digits(args.end) if args.mode == "mgrs-digits" else _parse_pair(args.end)
         except Exception as e:
             print(f"Error: {e}")
             return 2
@@ -132,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.json:
         payload = {
-            "format": "xy",
+            "format": "mgrs-digits" if args.mode == "mgrs-digits" else "xy",
             "start": list(start_tuple),
             "end": list(end_tuple),
             "distance_m": round(res.distance_m, args.precision),

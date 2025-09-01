@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
-from ..core import Result, compute_distance_bearing_xy
+from ..core import Result, compute_distance_bearing_xy, _parse_pair_mgrs_digits
 
 
 def _round_distance(value: float, precision: int) -> float:
@@ -17,18 +17,25 @@ def _round_distance(value: float, precision: int) -> float:
 
 
 class ComputeRequest(BaseModel):
-    start: list[float] = Field(..., description="[E, N] or [E, N, Z]")
-    end: list[float] = Field(..., description="[E, N] or [E, N, Z]")
+    # Accept numbers or strings to preserve leading zeros in mgrs-digits mode
+    start: list[float | str] = Field(..., description="[E, N] or [E, N, Z]")
+    end: list[float | str] = Field(..., description="[E, N] or [E, N, Z]")
     precision: int = Field(0, ge=0, le=6, description="Decimal places for distances; azimuth uses 1 decimal")
+    mode: str = Field("xy", description="Input mode: 'xy' (meters) or 'mgrs-digits' (e.g., '037,050' -> 3700, 5000 m)")
 
     @model_validator(mode="after")
     def check_lengths_and_values(self) -> "ComputeRequest":
         for name, arr in ("start", self.start), ("end", self.end):
             if len(arr) not in (2, 3):
-                raise ValueError(f"{name} must have 2 or 3 numbers")
-            for v in arr:
-                if not (float("-inf") < float(v) < float("inf")):
-                    raise ValueError(f"{name} contains non-finite value")
+                raise ValueError(f"{name} must have 2 or 3 values")
+            for idx, v in enumerate(arr):
+                try:
+                    # Accept numeric strings as well
+                    _ = float(v)  # type: ignore[arg-type]
+                except Exception:
+                    raise ValueError(f"{name}[{idx}] must be a number or numeric string")
+        if self.mode not in ("xy", "mgrs-digits"):
+            raise ValueError("mode must be 'xy' or 'mgrs-digits'")
         return self
 
 
@@ -62,15 +69,32 @@ def get_version() -> dict:
 @app.post("/api/compute", response_model=ComputeResponse, response_model_exclude_none=True)
 def compute(req: ComputeRequest) -> ComputeResponse:
     try:
-        start_t = tuple(req.start)  # type: ignore[assignment]
-        end_t = tuple(req.end)  # type: ignore[assignment]
+        if req.mode == "mgrs-digits":
+            # Join tokens back to strings to reuse the parser logic (supports spaces or commas)
+            def to_mgrs_str(parts: list[float | str]) -> str:
+                # Preserve leading zeros if provided as strings; otherwise use integer form
+                e_token = str(parts[0]).strip()
+                n_token = str(parts[1]).strip()
+                if "." in e_token:
+                    e_token = e_token.split(".")[0]
+                if "." in n_token:
+                    n_token = n_token.split(".") [0]
+                s = f"{e_token} {n_token}"
+                if len(parts) == 3:
+                    s += f" {float(parts[2])}"
+                return s
+            start_t = _parse_pair_mgrs_digits(to_mgrs_str(list(req.start)))
+            end_t = _parse_pair_mgrs_digits(to_mgrs_str(list(req.end)))
+        else:
+            start_t = tuple(float(x) for x in req.start)  # type: ignore[assignment]
+            end_t = tuple(float(x) for x in req.end)  # type: ignore[assignment]
         res: Result = compute_distance_bearing_xy(start_t, end_t)  # type: ignore[arg-type]
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
     precision = req.precision
     payload = {
-        "format": "xy",
+        "format": "mgrs-digits" if req.mode == "mgrs-digits" else "xy",
         "start": list(start_t),
         "end": list(end_t),
         "distance_m": _round_distance(res.distance_m, precision),

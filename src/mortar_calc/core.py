@@ -29,6 +29,44 @@ def _parse_pair(value: str) -> Tuple[float, float] | Tuple[float, float, float]:
     return parts  # type: ignore[return-value]
 
 
+def _parse_pair_mgrs_digits(value: str) -> Tuple[float, float] | Tuple[float, float, float]:
+    """
+    Parse an MGRS-like shorthand pair such as "037,050" (3-digit easting, 3-digit northing)
+    into meters by expanding each to 5 digits:
+    - For each of the first two components (E, N), if the token is a 1-5 digit integer string,
+      scale by 10**(5 - len(token)). Examples:
+        "1" -> 10000 m, "12" -> 1200 m, "123" -> 12300 m, "1234" -> 12340 m, "12345" -> 12345 m
+    - Optional third Z component is treated as meters as-is (float), not scaled.
+
+    This intentionally ignores MGRS zone and 100k grid square letters and assumes a local grid
+    context where both points share the same square; only the numerical digits are provided.
+    """
+    raw = value.replace(",", " ").split()
+    if len(raw) not in (2, 3):
+        raise ValueError("Expected 'E N' or 'E N Z' for MGRS shorthand")
+
+    def expand(token: str) -> float:
+        if not token.isdigit():
+            raise ValueError("MGRS shorthand requires integer digit strings for E and N (1-5 digits)")
+        if not (1 <= len(token) <= 5):
+            raise ValueError("MGRS shorthand supports 1 to 5 digits for E/N components")
+        scale = 10 ** (5 - len(token))
+        return float(int(token) * scale)
+
+    try:
+        e = expand(raw[0])
+        n = expand(raw[1])
+        if len(raw) == 3:
+            z = float(raw[2])
+            if not isfinite(z):
+                raise ValueError("Elevation value must be finite")
+            return (e, n, z)
+        return (e, n)
+    except ValueError as e:
+        # Re-raise with a clearer message
+        raise ValueError(str(e))
+
+
 def _bearing_deg_from_deltas(dx: float, dy: float) -> float:
     # Bearing from north, clockwise: atan2(E, N)
     b = (degrees(atan2(dx, dy)) + 360.0) % 360.0
