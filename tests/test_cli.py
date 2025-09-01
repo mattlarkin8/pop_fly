@@ -2,22 +2,24 @@ import io
 import json
 import os
 import tempfile
+import sys
 import unittest
 from contextlib import redirect_stdout
 
-from mortar_calc import cli
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+from pop_fly import cli
 
 
 class TestCLI(unittest.TestCase):
     def setUp(self) -> None:
         self.td = tempfile.TemporaryDirectory()
-        os.environ["MORTAR_CALC_CONFIG_DIR"] = self.td.name
-        return super().setUp()
+        os.environ["POP_FLY_CONFIG_DIR"] = self.td.name
+        super().setUp()
 
     def tearDown(self) -> None:
         self.td.cleanup()
-        os.environ.pop("MORTAR_CALC_CONFIG_DIR", None)
-        return super().tearDown()
+        os.environ.pop("POP_FLY_CONFIG_DIR", None)
+        super().tearDown()
 
     def run_cli(self, argv):
         buf = io.StringIO()

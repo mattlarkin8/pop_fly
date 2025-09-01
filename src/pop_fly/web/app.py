@@ -46,7 +46,7 @@ class ComputeResponse(BaseModel):
     delta_z_m: Optional[float] = None
 
 
-app = FastAPI(title="Mortar Calc API", docs_url="/docs")
+app = FastAPI(title="pop_fly API", docs_url="/docs")
 
 
 @app.get("/api/health")
@@ -57,7 +57,7 @@ def health() -> dict:
 @app.get("/api/version")
 def get_version() -> dict:
     try:
-        v = pkg_version("mortar-calc")
+        v = pkg_version("pop_fly")
     except PackageNotFoundError:
         v = "0.0.0"
     return {"version": v}
@@ -103,13 +103,13 @@ def compute(req: ComputeRequest) -> ComputeResponse:
 def main() -> None:
     import uvicorn
 
-    host = os.getenv("MORTAR_CALC_HOST", "127.0.0.1")
-    port_str = os.getenv("MORTAR_CALC_PORT", "8000")
+    host = os.getenv("POP_FLY_HOST", "127.0.0.1")
+    port_str = os.getenv("POP_FLY_PORT", "8000")
     try:
         port = int(port_str)
     except ValueError:
         port = 8000
-    uvicorn.run("mortar_calc.web.app:app", host=host, port=port, reload=False)
+    uvicorn.run("pop_fly.web.app:app", host=host, port=port, reload=False)
 
 
 if __name__ == "__main__":  # pragma: no cover

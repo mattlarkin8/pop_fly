@@ -11,12 +11,12 @@ from typing import Tuple
 from .core import Result, _parse_pair_mgrs_digits, compute_distance_bearing_xy
 
 
-APP_NAME = "Mortar Calc"
+APP_NAME = "pop_fly"
 
 
 def _config_path() -> Path:
-    # Windows: %APPDATA%/Mortar Calc/config.json
-    override = os.getenv("MORTAR_CALC_CONFIG_DIR")
+    # Windows: %APPDATA%/pop_fly/config.json
+    override = os.getenv("POP_FLY_CONFIG_DIR")
     if override:
         return Path(override) / "config.json"
     if os.name == "nt":
@@ -30,7 +30,7 @@ def _config_path() -> Path:
     # Linux / other
     xdg = os.getenv("XDG_CONFIG_HOME")
     base = Path(xdg) if xdg else (Path.home() / ".config")
-    return base / "mortar-calc" / "config.json"
+    return base / "pop_fly" / "config.json"
 
 
 def _load_saved_start() -> tuple[float, float] | tuple[float, float, float] | None:
@@ -68,7 +68,7 @@ def _format_signed(value: float, precision: int = 0) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="mortar-calc", description="Distance and azimuth calculator (MGRS digits only; optional Z)")
+    parser = argparse.ArgumentParser(prog="pop_fly", description="Distance and azimuth calculator (MGRS digits only; optional Z)")
     parser.add_argument("--start", type=str, help="Quoted 'EEE,NNN' or 'EEE,NNN,Z' (1-5 digit E/N; Z in meters)", required=False)
     parser.add_argument("--end", type=str, help="Quoted 'EEE,NNN' or 'EEE,NNN,Z' (1-5 digit E/N; Z in meters)", required=False)
     parser.add_argument("--set-start", dest="set_start", type=str, help="Persist a default start 'EEE,NNN' or 'EEE,NNN,Z'", required=False)

@@ -1,7 +1,11 @@
 import math
 import unittest
+import os
+import sys
 
-from mortar_calc.core import compute_distance_bearing_xy
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+
+from pop_fly.core import compute_distance_bearing_xy
 
 
 class TestCore(unittest.TestCase):

@@ -4,7 +4,7 @@ import { ComputeResponse, computeApi } from './api'
 
 type Triplet = [number, number, number?]
 
-const LS_KEY = 'mortar-calc/saved-start'
+const LS_KEY = 'pop_fly/saved-start'
 
 function parseNum(v: string): number | undefined {
   if (v.trim() === '') return undefined
@@ -130,7 +130,7 @@ export default function App() {
 
   return (
     <Container className="py-4">
-      <h1 className="mb-3">Mortar Calc</h1>
+  <h1 className="mb-3">pop_fly</h1>
       {error && (
         <Alert variant="danger" onClose={() => setError(null)} dismissible>
           {error}

@@ -1,6 +1,6 @@
-# Mortar Calc — Distance & Direction Calculator PRD
+# Pop Fly — Distance & Direction Calculator PRD
 
-Version: 2.0  
+Version: 2.1
 Owner: You  
 Date: 2025-09-01
 
@@ -58,7 +58,7 @@ Example scenarios:
   - Rounding rules: distances (including slant and ΔZ) rounded to `precision` (default 0); azimuth rounded to 0.1 mil.
 
 4. cli interface (existing)
-  - Command: `mortar-calc` (or `mortar_calc.py` if not installed).
+  - Command: `pop_fly` (or module entry if not installed).
   - Flags:
   - `--start "EEE,NNN" --end "EEE,NNN"` OR `--start "EEE,NNN,Z" --end "EEE,NNN,Z"` (E/N are 1–5 MGRS digits; Z in meters)
   - `--set-start "EEE,NNN"` (optional; saves a persistent default start point)
@@ -67,10 +67,10 @@ Example scenarios:
     - `--json` (optional)
     - `--precision <int>` (default: meters 0, mils 1)
   - Examples:
-  - `mortar-calc --set-start "037,050,50"` (save start once, with elevation)
-  - `mortar-calc --end "051,070,130"` (uses saved start; computes slant and ΔZ)
-  - `mortar-calc --start "037,050" --end "051,070"` (horizontal only)
-  - `mortar-calc --start "037,050,50" --end "051,070,130"` (horizontal + slant)
+  - `pop_fly --set-start "037,050,50"` (save start once, with elevation)
+  - `pop_fly --end "051,070,130"` (uses saved start; computes slant and ΔZ)
+  - `pop_fly --start "037,050" --end "051,070"` (horizontal only)
+  - `pop_fly --start "037,050,50" --end "051,070,130"` (horizontal + slant)
 
 5. http api (new) 
   - Framework: FastAPI; bind local-only (127.0.0.1:8000).
@@ -151,7 +151,7 @@ Example scenarios:
 ## cli ux 
 - Clear usage/help with examples.
 - Echo parsed inputs when `--json` is used.
-- Persisted start storage: platform-appropriate config path (Windows: `%APPDATA%/Mortar Calc/config.json`; macOS: `~/Library/Application Support/Mortar Calc/config.json`; Linux: `$XDG_CONFIG_HOME/mortar-calc/config.json` or `~/.config/mortar-calc/config.json`).
+- Persisted start storage: platform-appropriate config path (Windows: `%APPDATA%/pop_fly/config.json`; macOS: `~/Library/Application Support/pop_fly/config.json`; Linux: `$XDG_CONFIG_HOME/pop_fly/config.json` or `~/.config/pop_fly/config.json`).
 - When a persisted start exists and `--start` is omitted, use saved start; if neither is present, return a clear error.
 - When a persisted start includes Z and an `--end` with Z is provided, compute slant/ΔZ; otherwise compute horizontal only.
 
@@ -190,7 +190,7 @@ Example scenarios:
 - NATO mils: `mils = deg * 6400 / 360`
 
 ## examples 
-- Azimuth: `mortar-calc --start "037,050" --end "051,070"`
+- Azimuth: `pop_fly --start "037,050" --end "051,070"`
 - Persisted start workflow:
-  - `mortar-calc --set-start "037,050"`
-  - `mortar-calc --end "051,070"`
+  - `pop_fly --set-start "037,050"`
+  - `pop_fly --end "051,070"`

@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mortar-calc"
+name = "pop_fly"
 version = "0.1.0"
 description = "Distance and direction calculator for local XY(+Z) grids"
 readme = "README.md"
@@ -18,8 +18,8 @@ classifiers = [
 ]
 
 [project.scripts]
-mortar-calc = "mortar_calc.cli:main"
-mortar-calc-web = "mortar_calc.web.app:main"
+pop_fly = "pop_fly.cli:main"
+pop_fly_web = "pop_fly.web.app:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

@@ -1,8 +1,12 @@
 import unittest
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from fastapi.testclient import TestClient
 
-from mortar_calc.web.app import app
+from pop_fly.web.app import app
 
 
 class TestAPI(unittest.TestCase):
