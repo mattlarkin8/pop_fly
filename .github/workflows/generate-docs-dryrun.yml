@@ -1,16 +1,15 @@
-name: Generate Documentation PR
+name: Generate Docs Dry-Run
 
 on:
-  pull_request:
-    types: [closed]
+  push:
+    branches: [ main ]
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
-  gen-docs:
-    if: github.event.pull_request.merged == true
+  gen-docs-dryrun:
+    name: docs dry-run
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -19,14 +18,14 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements-dev.txt ]; then python -m pip install -r requirements-dev.txt; else pip install PyGithub requests; fi
+          if [ -f requirements-dev.txt ]; then python -m pip install -r requirements-dev.txt; fi
 
       - name: Run docs generator (dry-run)
         env:

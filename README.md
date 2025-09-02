@@ -34,3 +34,25 @@ Frontend auto-build before server start
 
   - PowerShell:
     $Env:POP_FLY_SKIP_FRONTEND_BUILD = "1"; pop_fly_web
+
+
+Automation & testing
+---------------------
+
+We use a small set of automation scripts that call LLMs to generate implementation plans and documentation edits. For safety these scripts support a dry-run mode and local testing:
+
+- Install developer dependencies:
+
+  ```powershell
+  python -m venv .venv
+  & .venv\Scripts\Activate.ps1
+  python -m pip install -r requirements-dev.txt
+  ```
+
+- Scripts support `--dry-run` (or `DRY_RUN=1`) which prevents any writes or PR creation and instead writes artifacts to `tmp/` for inspection:
+  - `scripts/generate_docs.py --dry-run` writes diffs to `tmp/docs-dryrun/`.
+  - `scripts/ai_plan_issue.py --dry-run` writes plans to `tmp/ai-plan-dryrun/`.
+
+- CI behavior: the repo CI runs the docs generator in dry-run mode on merges and uploads artifacts for review. This keeps automated docs generation auditable and safe by default.
+
+If you want full auto-apply of docs changes, discuss enabling a guarded workflow and appropriate repository secrets with the team.

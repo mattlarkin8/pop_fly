@@ -75,6 +75,11 @@ LLM usage guidance
 - Prefer small context windows first: include only the plan and a concise repo structure summary. If more context is required, iterate rather than asking for the whole repo in one call.
 - Sanitize and validate any model output before applying to disk: parse JSON, strip markup fences, validate paths against allowed directories, and check for suspicious content.
 
+Environment and dependencies
+
+- Prefer installing dependencies once in the developer environment rather than calling `pip` at runtime in automation scripts. Add required packages to `requirements-dev.txt` and instruct CI to install them.
+- If a script must install packages at runtime (very rare), it must only do so in an isolated, ephemeral environment and log the operation.
+
 Checklist the assistant will follow (every multi-step action)
 
 - [ ] Validate environment and secrets (venv, tokens)
