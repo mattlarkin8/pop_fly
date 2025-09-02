@@ -35,6 +35,7 @@ Frontend auto-build before server start
   - PowerShell:
     $Env:POP_FLY_SKIP_FRONTEND_BUILD = "1"; pop_fly_web
 
+
 Automation & testing
 ---------------------
 
@@ -55,4 +56,3 @@ We use a small set of automation scripts that call LLMs to generate implementati
 - CI behavior: the repo CI runs the docs generator in dry-run mode on merges and uploads artifacts for review. This keeps automated docs generation auditable and safe by default.
 
 If you want full auto-apply of docs changes, discuss enabling a guarded workflow and appropriate repository secrets with the team.
-
