@@ -34,4 +34,3 @@ Frontend auto-build before server start
 
   - PowerShell:
     $Env:POP_FLY_SKIP_FRONTEND_BUILD = "1"; pop_fly_web
-

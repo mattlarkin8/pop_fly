@@ -196,3 +196,6 @@ Example scenarios:
 - Persisted start workflow:
   - `pop_fly --set-start "037,050"`
   - `pop_fly --end "051,070"`
+
+## automated docs generation
+A new workflow and script for automated documentation generation have been introduced. This includes a safe Markdown applier and tests to ensure that section-anchored updates are accurately reflected in the documentation, leveraging LLM context for precision.
