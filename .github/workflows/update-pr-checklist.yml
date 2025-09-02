@@ -26,6 +26,6 @@ jobs:
 
       - name: Sync checklist in PR body
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.POP_FLY_PAT }}
         run: |
           python -u scripts/update_pr_checklist.py

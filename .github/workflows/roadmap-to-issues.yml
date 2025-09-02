@@ -24,6 +24,6 @@ jobs:
 
       - name: Run planner to create/update issues
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.POP_FLY_PAT }}
         run: |
           python -u scripts/roadmap_to_issues.py

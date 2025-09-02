@@ -29,6 +29,6 @@ jobs:
 
       - name: Scaffold branch and PR
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.POP_FLY_PAT }}
         run: |
           python -u scripts/scaffold_from_plan.py
