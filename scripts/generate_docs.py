@@ -479,7 +479,8 @@ def main() -> None:
             print(f"DRY-RUN: wrote diffs to {out_dir}")
     else:
         print("No valid doc entries applied.")
-        pr_obj.create_issue_comment("No valid documentation updates were applied by automation.")
+        if not dry_run and pr_obj is not None:
+            pr_obj.create_issue_comment("No valid documentation updates were applied by automation.")
 
 
 if __name__ == "__main__":
