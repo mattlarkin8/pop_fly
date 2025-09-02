@@ -49,4 +49,4 @@ jobs:
       - name: Install and build
         run: |
           (npm ci || npm install)
-          npm run build --if-present
+          npm run build
