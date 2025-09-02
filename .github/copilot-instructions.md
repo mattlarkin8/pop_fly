@@ -21,6 +21,9 @@
 - Run unit tests (same as the workspace task):
   - Activate virtualenv on Windows PowerShell: `& .venv\Scripts\Activate.ps1`
   - Run tests: `python -m unittest discover -s tests -p "test_*.py"` (the workspace task `run tests` runs this exact command).
+- Install developer dependencies (recommended) after creating/activating a virtualenv:
+  - `python -m pip install -r requirements-dev.txt`
+  - This replaces ad-hoc `pip install` calls in automation scripts; prefer installing once in your dev environment.
 - Run the CLI directly (dev): `python -m pop_fly.cli --start "037,050" --end "051,070"` or install editable and run `pop_fly --start "037,050" --end "051,070"`.
 - Run the web server locally (dev or prod): use the entry point `pop_fly_web` (declared in `pyproject.toml`) or run uvicorn directly: `uvicorn pop_fly.web.app:app --host 127.0.0.1 --port 8000` (the app's `main()` function uses `uvicorn.run`).
 
@@ -60,6 +63,12 @@
 - To reproduce CLI behavior locally without installing: run `python -m pop_fly.cli ...` inside the activated venv.
 - To test API handlers without starting the server, import `pop_fly.web.app` and exercise `compute()` via TestClient from `fastapi.testclient`.
 - If static frontend isn't served in production, verify `frontend/dist` exists; the app mounts that directory if present.
+ 
+Local dev setup (recommended):
+1. Create a virtualenv in repo root: `python -m venv .venv`
+2. Activate (PowerShell): `& .venv\Scripts\Activate.ps1`
+3. Install dev deps: `python -m pip install -r requirements-dev.txt`
+4. Run tests: `python -m unittest discover -s tests -p "test_*.py"`
 
 ## Small gotchas
 - The library intentionally ignores MGRS zone and 100k letters — inputs are only the numeric digits. Ensure callers provide values in the same implicit 100k grid.

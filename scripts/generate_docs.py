@@ -9,6 +9,7 @@ This script is intended to run in CI when a pull request is merged. It:
 """
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import subprocess
@@ -110,6 +111,28 @@ def call_llm_for_docs(
     except json.JSONDecodeError:
         return {"docs": [], "note": "model returned non-JSON"}
     return data
+
+
+def validate_docs_ops_schema(docs: List[Dict[str, Any]]) -> Tuple[bool, Optional[str]]:
+    """Validate the structure of the LLM-produced docs ops against a local JSON schema.
+
+    Returns (valid, message). If jsonschema is not installed, validation is skipped and returns (True, None).
+    """
+    schema_path = os.path.join(os.getcwd(), "docs", "schema", "docs_ops.json")
+    if not os.path.exists(schema_path):
+        return True, None
+    try:
+        from jsonschema import validate, ValidationError  # type: ignore
+    except Exception:
+        return True, "jsonschema not installed; skipping schema validation"
+
+    with open(schema_path, "r", encoding="utf-8") as f:
+        schema = json.load(f)
+    try:
+        validate(instance={"docs": docs}, schema=schema)
+    except ValidationError as e:
+        return False, str(e)
+    return True, None
 
 
 Heading = Tuple[int, str, int]  # (level, title, line_index)
@@ -278,21 +301,30 @@ def git(cmd: List[str]) -> str:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Generate docs updates from a merged PR using an LLM")
+    parser.add_argument("--dry-run", action="store_true", help="Do not push or create PR; write diffs to tmp/docs-dryrun/")
+    args = parser.parse_args()
+
+    dry_run = args.dry_run or os.environ.get("DRY_RUN") == "1"
+
     token = os.environ.get("GITHUB_TOKEN")
     if not token:
-        raise SystemExit("GITHUB_TOKEN missing")
+        # Allow running in dry-run locally without a token
+        if not dry_run:
+            raise SystemExit("GITHUB_TOKEN missing")
 
     ensure_pygithub()
     if Github is None:
-        raise SystemExit("PyGithub is not available after installation attempt")
-    gh = Github(token)
+        if not dry_run:
+            raise SystemExit("PyGithub is not available after installation attempt")
+    gh = Github(token) if token and Github is not None else None
 
     repo_slug = os.environ.get("GITHUB_REPOSITORY")
-    if not repo_slug:
+    if not repo_slug and not dry_run:
         raise SystemExit("GITHUB_REPOSITORY missing")
 
-    owner, repo_name = repo_slug.split("/", 1)
-    repo = gh.get_repo(repo_slug)
+    owner, repo_name = (repo_slug.split("/", 1) if repo_slug else (None, None))
+    repo = gh.get_repo(repo_slug) if gh is not None and repo_slug else None
 
     # Determine PR number from event payload
     event_path = os.environ.get("GITHUB_EVENT_PATH")
@@ -321,23 +353,36 @@ def main() -> None:
     docs = llm_result.get("docs", [])
     note = llm_result.get("note")
 
+    # Validate against local JSON schema if present
+    valid_schema, schema_msg = validate_docs_ops_schema(docs)
+    if not valid_schema:
+        msg = f"LLM returned docs that do not match schema: {schema_msg}"
+        print(msg)
+        if not dry_run and pr_obj is not None:
+            pr_obj.create_issue_comment(msg)
+        return
+
     if not docs:
         print("No docs updates returned by LLM.")
         if note:
             print("Note:", note)
         # Still create a comment on the PR that no docs were suggested
-        pr_obj.create_issue_comment("No documentation updates were suggested by the automated doc generation step.")
+        if not dry_run and pr_obj is not None:
+            pr_obj.create_issue_comment("No documentation updates were suggested by the automated doc generation step.")
         return
 
     # Validate and apply docs changes
     allowed = {"README.md", "PRD.md"}
     repo_root = os.getcwd()
 
-    # Create a branch
+    # Create a branch (skip if dry-run)
     ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
     branch = f"docs/update-pr-{pr_number}-{ts}"
-    git(["git", "fetch", "origin", "main"])
-    git(["git", "checkout", "-b", branch, "origin/main"])
+    if not dry_run:
+        git(["git", "fetch", "origin", "main"])
+        git(["git", "checkout", "-b", branch, "origin/main"])
+    else:
+        print(f"DRY-RUN: would create branch {branch}")
 
     applied: List[str] = []
     per_file_ops: Dict[str, List[Dict[str, Any]]] = {}
@@ -378,7 +423,8 @@ def main() -> None:
                 msg_lines.append(f"- {e}")
         if note:
             msg_lines.append(f"Note from model: {note}")
-        pr_obj.create_issue_comment("\n".join(msg_lines))
+        if not dry_run and pr_obj is not None:
+            pr_obj.create_issue_comment("\n".join(msg_lines))
         print("Errors encountered; aborting without commit.")
         return
 
@@ -391,36 +437,46 @@ def main() -> None:
         applied.append(path)
 
     if applied:
-        git(["git", "add", "-A"])
-        git(["git", "config", "user.name", "github-actions"])
-        git(["git", "config", "user.email", "github-actions@users.noreply.github.com"])
-        git(["git", "commit", "-m", f"docs: update README/PRD for PR #{pr_number}"])
-        git(["git", "push", "origin", branch])
+        if not dry_run:
+            git(["git", "add", "-A"])
+            git(["git", "config", "user.name", "github-actions"])
+            git(["git", "config", "user.email", "github-actions@users.noreply.github.com"])
+            git(["git", "commit", "-m", f"docs: update README/PRD for PR #{pr_number}"])
+            git(["git", "push", "origin", branch])
 
-        # Create PR
-        title = f"docs: update docs for PR #{pr_number} — {pr_obj.title}"
-        # Build a short diff preview for body
-        body_lines = [
-            f"Automated documentation updates based on merged PR #{pr_number}.",
-            "",
-            "Files updated:",
-        ] + [f"- {p}" for p in applied]
-        body_lines.append("")
-        body_lines.append("Preview (truncated unified diff):")
-        for p, (_t, _w, _e, diff_prev) in file_results.items():
-            if not diff_prev:
-                continue
-            body_lines.append(f"\n```diff\n{diff_prev}\n```\n")
-        if note:
-            body_lines.append(f"\nModel note: {note}")
-        body_lines.append("\nIf these updates look good, merge this PR.")
-        body = "\n".join(body_lines)
-        try:
-            new_pr = repo.create_pull(title=title, body=body, head=branch, base=repo.default_branch)
-            pr_obj.create_issue_comment(f"Automated docs PR created: #{new_pr.number}")
-            print(f"Created docs PR: {new_pr.html_url}")
-        except Exception as e:
-            print("Failed to create docs PR:", e)
+            # Create PR
+            title = f"docs: update docs for PR #{pr_number} — {pr_obj.title}"
+            # Build a short diff preview for body
+            body_lines = [
+                f"Automated documentation updates based on merged PR #{pr_number}.",
+                "",
+                "Files updated:",
+            ] + [f"- {p}" for p in applied]
+            body_lines.append("")
+            body_lines.append("Preview (truncated unified diff):")
+            for p, (_t, _w, _e, diff_prev) in file_results.items():
+                if not diff_prev:
+                    continue
+                body_lines.append(f"\n```diff\n{diff_prev}\n```\n")
+            if note:
+                body_lines.append(f"\nModel note: {note}")
+            body_lines.append("\nIf these updates look good, merge this PR.")
+            body = "\n".join(body_lines)
+            try:
+                new_pr = repo.create_pull(title=title, body=body, head=branch, base=repo.default_branch)
+                pr_obj.create_issue_comment(f"Automated docs PR created: #{new_pr.number}")
+                print(f"Created docs PR: {new_pr.html_url}")
+            except Exception as e:
+                print("Failed to create docs PR:", e)
+        else:
+            # Write diffs to tmp/docs-dryrun
+            out_dir = os.path.join(os.getcwd(), "tmp", "docs-dryrun")
+            os.makedirs(out_dir, exist_ok=True)
+            for p, (_t, _w, _e, diff_prev) in file_results.items():
+                fname = os.path.join(out_dir, p.replace("/", "_") + ".diff.txt")
+                with open(fname, "w", encoding="utf-8") as f:
+                    f.write(diff_prev or "")
+            print(f"DRY-RUN: wrote diffs to {out_dir}")
     else:
         print("No valid doc entries applied.")
         pr_obj.create_issue_comment("No valid documentation updates were applied by automation.")
