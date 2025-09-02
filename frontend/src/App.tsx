@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Col, Container, Form, InputGroup, Row, Tab, Tabs } from 'react-bootstrap'
 import { ComputeResponse, computeApi } from './api'
 
-type Triplet = [number, number, number?]
+type Triplet = [number | string, number | string, number?]
 
 const LS_KEY = 'pop_fly/saved-start'
 
@@ -26,7 +26,7 @@ export default function App() {
   const [endZ, setEndZ] = useState('')
   const [precision, setPrecision] = useState(0)
   const [useSavedStart, setUseSavedStart] = useState(true)
-  const [savedStart, setSavedStart] = useState<number[] | null>(null)
+  const [savedStart, setSavedStart] = useState<(number | string)[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<ComputeResponse | null>(null)
@@ -34,44 +34,46 @@ export default function App() {
   // Load saved start
   useEffect(() => {
     const raw = localStorage.getItem(LS_KEY)
-  if (raw) {
+    if (raw) {
       try {
-        const arr = JSON.parse(raw) as number[]
+        const arr = JSON.parse(raw) as (number | string)[]
         if (Array.isArray(arr) && (arr.length === 2 || arr.length === 3)) {
           setStartE(arr[0]?.toString() ?? '')
           setStartN(arr[1]?.toString() ?? '')
           setStartZ((arr[2] ?? '').toString())
-      setSavedStart(arr)
+          setSavedStart(arr)
         }
       } catch {}
     }
   }, [])
 
-  const startArray = useMemo(() => {
-    const e = parseNum(startE)
-    const n = parseNum(startN)
-    const z = parseNum(startZ)
-    const arr: number[] = []
-    if (e !== undefined && n !== undefined) {
-      arr.push(e, n)
-      if (startZ.trim() !== '' && z !== undefined) arr.push(z)
+  const startArray = useMemo<(number | string)[]>(() => {
+    const eStr = startE.trim()
+    const nStr = startN.trim()
+    const zNum = parseNum(startZ)
+    const arr: (number | string)[] = []
+    if (eStr !== '' && nStr !== '') {
+      // Preserve leading zeros by sending E/N as strings
+      arr.push(eStr, nStr)
+      if (startZ.trim() !== '' && zNum !== undefined) arr.push(zNum)
     }
     return arr
   }, [startE, startN, startZ])
 
-  const endArray = useMemo(() => {
-    const e = parseNum(endE)
-    const n = parseNum(endN)
-    const z = parseNum(endZ)
-    const arr: number[] = []
-    if (e !== undefined && n !== undefined) {
-      arr.push(e, n)
-      if (endZ.trim() !== '' && z !== undefined) arr.push(z)
+  const endArray = useMemo<(number | string)[]>(() => {
+    const eStr = endE.trim()
+    const nStr = endN.trim()
+    const zNum = parseNum(endZ)
+    const arr: (number | string)[] = []
+    if (eStr !== '' && nStr !== '') {
+      // Preserve leading zeros by sending E/N as strings
+      arr.push(eStr, nStr)
+      if (endZ.trim() !== '' && zNum !== undefined) arr.push(zNum)
     }
     return arr
   }, [endE, endN, endZ])
 
-  const effectiveStart = useMemo(() => {
+  const effectiveStart = useMemo<(number | string)[]>(() => {
     if (useSavedStart && startArray.length < 2 && savedStart && savedStart.length >= 2) {
       return savedStart
     }
@@ -89,7 +91,7 @@ export default function App() {
     }
     setBusy(true)
     try {
-  const res = await computeApi({ start: effectiveStart, end: endArray, precision })
+      const res = await computeApi({ start: effectiveStart, end: endArray, precision })
       setResult(res)
     } catch (e: any) {
       setError(e?.message || 'Request failed')
@@ -111,8 +113,8 @@ export default function App() {
       setError('Cannot save start: please enter at least E and N.')
       return
     }
-  localStorage.setItem(LS_KEY, JSON.stringify(startArray))
-  setSavedStart(startArray)
+    localStorage.setItem(LS_KEY, JSON.stringify(startArray))
+    setSavedStart(startArray)
   }
 
   const hr = result
@@ -130,7 +132,7 @@ export default function App() {
 
   return (
     <Container className="py-4">
-  <h1 className="mb-3">Pop Fly</h1>
+      <h1 className="mb-3">Pop Fly</h1>
       {error && (
         <Alert variant="danger" onClose={() => setError(null)} dismissible>
           {error}
@@ -142,13 +144,13 @@ export default function App() {
           <Row className="g-2">
             <Col>
               <Form.Group controlId="startE">
-                <Form.Label>Easting (m)</Form.Label>
+                <Form.Label>Easting (digits or meters)</Form.Label>
                 <Form.Control value={startE} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setStartE(e.target.value)} placeholder="E" />
               </Form.Group>
             </Col>
             <Col>
               <Form.Group controlId="startN">
-                <Form.Label>Northing (m)</Form.Label>
+                <Form.Label>Northing (digits or meters)</Form.Label>
                 <Form.Control value={startN} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setStartN(e.target.value)} placeholder="N" />
               </Form.Group>
             </Col>
@@ -175,13 +177,13 @@ export default function App() {
           <Row className="g-2">
             <Col>
               <Form.Group controlId="endE">
-                <Form.Label>Easting (m)</Form.Label>
+                <Form.Label>Easting (digits or meters)</Form.Label>
                 <Form.Control value={endE} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEndE(e.target.value)} placeholder="E" />
               </Form.Group>
             </Col>
             <Col>
               <Form.Group controlId="endN">
-                <Form.Label>Northing (m)</Form.Label>
+                <Form.Label>Northing (digits or meters)</Form.Label>
                 <Form.Control value={endN} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEndN(e.target.value)} placeholder="N" />
               </Form.Group>
             </Col>

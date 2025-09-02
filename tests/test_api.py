@@ -49,6 +49,14 @@ class TestAPI(unittest.TestCase):
         r = self.client.post("/api/compute", json=payload)
         self.assertEqual(r.status_code, 422)  # pydantic validation error
 
+    def test_cli_vs_api_parity_example(self):
+        # Example from report: start "021,032" end "084,069" should be 7306 m
+        payload = {"start": ["021", "032"], "end": ["084", "069"], "precision": 0}
+        r = self.client.post("/api/compute", json=payload)
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertEqual(data["distance_m"], 7306)
+
 
 if __name__ == "__main__":
     unittest.main()

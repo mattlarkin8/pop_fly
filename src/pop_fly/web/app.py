@@ -13,7 +13,8 @@ from ..core import Result, compute_distance_bearing_xy, _parse_pair_mgrs_digits
 
 
 def _round_distance(value: float, precision: int) -> float:
-    return round(float(value), int(precision))
+    # Mirror CLI rounding behavior exactly
+    return round(value, precision)
 
 
 class ComputeRequest(BaseModel):
@@ -66,19 +67,23 @@ def get_version() -> dict:
 @app.post("/api/compute", response_model=ComputeResponse, response_model_exclude_none=True)
 def compute(req: ComputeRequest) -> ComputeResponse:
     try:
-        # Join tokens back to strings to reuse the parser logic (supports spaces or commas)
+        # Build strings for the MGRS-digit parser while preserving leading zeros on E/N.
         def to_mgrs_str(parts: list[float | str]) -> str:
-            # Preserve leading zeros if provided as strings; otherwise use integer form
-            e_token = str(parts[0]).strip()
-            n_token = str(parts[1]).strip()
+            e_raw = parts[0]
+            n_raw = parts[1]
+            e_token = str(e_raw).strip() if isinstance(e_raw, str) else str(int(float(e_raw)))
+            n_token = str(n_raw).strip() if isinstance(n_raw, str) else str(int(float(n_raw)))
+            # Strip any decimals from tokens; only integer digits allowed for E/N
             if "." in e_token:
                 e_token = e_token.split(".")[0]
             if "." in n_token:
                 n_token = n_token.split(".")[0]
             s = f"{e_token} {n_token}"
             if len(parts) == 3:
+                # Z can be float
                 s += f" {float(parts[2])}"
             return s
+
         start_t = _parse_pair_mgrs_digits(to_mgrs_str(list(req.start)))
         end_t = _parse_pair_mgrs_digits(to_mgrs_str(list(req.end)))
         res: Result = compute_distance_bearing_xy(start_t, end_t)  # type: ignore[arg-type]
