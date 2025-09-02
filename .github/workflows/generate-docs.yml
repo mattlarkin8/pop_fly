@@ -40,13 +40,3 @@ jobs:
         with:
           name: docs-dryrun
           path: tmp/docs-dryrun
-
-      - name: Conditional apply (disabled by default)
-        if: env.ALLOW_DOCS_AUTO_APPLY == 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          echo "Auto-apply is enabled; running docs generator to create PR"
-          python scripts/generate_docs.py
-        # To enable automatic apply, set the repository secret ALLOW_DOCS_AUTO_APPLY to "true"
