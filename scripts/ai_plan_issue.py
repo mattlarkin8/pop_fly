@@ -24,7 +24,7 @@ except Exception:
     Github = None
 
 
-MODEL = os.environ.get("PLAN_MODEL", "gpt-4o-mini")
+MODEL = os.environ.get("PLAN_MODEL", "gpt-5-mini")
 
 SYSTEM_PROMPT = (
     "You are an expert software project planner. Given a GitHub issue, produce a short, actionable plan: "
