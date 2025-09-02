@@ -1,0 +1,46 @@
+name: "Plan New Feature"
+
+on:
+  workflow_dispatch:
+    inputs:
+      feature_request:
+        description: 'High-level description of the new feature'
+        required: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Generate plan
+        id: plan
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          pip install requests
+          python scripts/plan_feature.py \
+            --request "${{ github.event.inputs.feature_request }}" \
+            --output "feature-plan.md"
+
+      - name: Create new branch and commit plan
+        run: |
+          # Sanitize the feature request to create a valid branch name
+          BRANCH_NAME_RAW="feature/plan-${{ github.event.inputs.feature_request }}"
+          BRANCH_NAME=$(echo "$BRANCH_NAME_RAW" | tr -s '[:space:]' '-' | tr -s '[:punct:]' '-' | tr '[:upper:]' '[:lower:]' | sed 's/--/-/g' | sed 's/^-//' | sed 's/-$//' | cut -c 1-60)
+          
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          
+          git checkout -b $BRANCH_NAME
+          git add feature-plan.md
+          git commit -m "feat: add AI-generated plan for '${{ github.event.inputs.feature_request }}'"
+          git push origin $BRANCH_NAME
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
