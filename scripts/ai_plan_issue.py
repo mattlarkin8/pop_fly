@@ -65,6 +65,10 @@ def validate_plan_schema(plan_text: str) -> Tuple[bool, Optional[str]]:
 
 
 def ensure_pygithub() -> None:
+    """Install and import PyGithub only when we need to post to GitHub.
+
+    This should not be called in dry-run mode so we avoid side effects.
+    """
     global Github
     if Github is not None:
         return
@@ -76,12 +80,17 @@ def ensure_pygithub() -> None:
     Github = _Github
 
 
-def get_issue_context() -> tuple[int, str, str]:
-    repo_slug = os.environ.get("GITHUB_REPOSITORY")
-    if not repo_slug:
-        raise SystemExit("GITHUB_REPOSITORY missing")
+def get_issue_context(dry_run: bool = False) -> tuple[int, Optional[str], Optional[str]]:
+    """Return (issue_number, owner, repo_name).
 
-    # Default to the issue from the comment event
+    In non-dry-run mode we require GITHUB_REPOSITORY and an issue number. In
+    dry-run mode we are permissive: missing repo or issue number will be
+    tolerated and returned as None (or 0 for issue number) so the rest of the
+    script can run without attempting network calls.
+    """
+    repo_slug = os.environ.get("GITHUB_REPOSITORY")
+
+    # Default to the issue from the comment event (if available)
     issue_number: Optional[int] = None
     event_name = os.environ.get("GITHUB_EVENT_NAME")
     event_path = os.environ.get("GITHUB_EVENT_PATH")
@@ -90,14 +99,26 @@ def get_issue_context() -> tuple[int, str, str]:
             event = json.load(f)
         if event.get("issue") and event["issue"].get("number"):
             issue_number = int(event["issue"]["number"])
+
+    # allow manual override via input
     if not issue_number:
-        # allow manual override via input
-        issue_number = int(os.environ.get("ISSUE_NUMBER", "0")) or None
-    if not issue_number:
+        try:
+            issue_number = int(os.environ.get("ISSUE_NUMBER", "0")) or None
+        except ValueError:
+            issue_number = None
+
+    if not dry_run and not issue_number:
         raise SystemExit("No issue number found in event or inputs")
 
-    owner, repo = repo_slug.split("/", 1)
-    return issue_number, owner, repo
+    owner = None
+    repo_name = None
+    if repo_slug:
+        owner, repo_name = repo_slug.split("/", 1)
+    elif not dry_run:
+        raise SystemExit("GITHUB_REPOSITORY missing")
+
+    # For dry-run, return permissive defaults (issue_number may be None)
+    return issue_number or 0, owner, repo_name
 
 
 def call_llm(prompt: str) -> str:
@@ -165,13 +186,21 @@ def main() -> None:
     if not token and not dry_run:
         raise SystemExit("GITHUB_TOKEN missing")
 
-    ensure_pygithub()
+    # Resolve issue/repo context first; in dry-run mode this is permissive and
+    # will not raise if env vars are missing.
+    issue_number, owner, repo_name = get_issue_context(dry_run=dry_run)
 
-    issue_number, owner, repo_name = get_issue_context()
-    assert Github is not None, "PyGithub not initialized"
-    gh = Github(token) if token else None
-    repo = gh.get_repo(f"{owner}/{repo_name}") if gh is not None else None
-    issue = repo.get_issue(number=issue_number) if repo is not None else None
+    gh = None
+    repo = None
+    issue = None
+    # Only import/initialize PyGithub and fetch the real issue when we intend to
+    # post (not dry-run) and a token is available.
+    if not dry_run and token:
+        ensure_pygithub()
+        assert Github is not None, "PyGithub not initialized"
+        gh = Github(token)
+        repo = gh.get_repo(f"{owner}/{repo_name}")
+        issue = repo.get_issue(number=issue_number)
 
     # Build prompt from issue title and body
     title = issue.title if issue is not None else os.environ.get("ISSUE_TITLE", "")
