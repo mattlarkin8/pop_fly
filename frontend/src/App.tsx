@@ -130,7 +130,7 @@ export default function App() {
 
   return (
     <Container className="py-4">
-  <h1 className="mb-3">pop_fly</h1>
+  <h1 className="mb-3">Pop Fly</h1>
       {error && (
         <Alert variant="danger" onClose={() => setError(null)} dismissible>
           {error}
