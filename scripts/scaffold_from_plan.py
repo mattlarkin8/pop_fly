@@ -1,155 +1,224 @@
 #!/usr/bin/env python3
 """
-Create a branch and PR from an issue's plan comment.
+Create a branch and PR from a feature plan.
 
-- Triggered by comment '/scaffold' or manual dispatch.
-- Finds the latest automated plan comment (from ai_plan_issue.py) or uses the issue body.
-- Creates a branch with a README checklist commit and opens a PR linking the issue.
-- Does not modify source code; only scaffolds a task list and wiring.
+- Triggered by a push to a branch matching 'feature/plan-**'.
+- Reads the 'feature-plan.md' file from the branch.
+- In the future, this script will use an AI to generate code from the plan.
+- For now, it creates a PR with the plan.
 """
 from __future__ import annotations
 
-import json
+import argparse
 import os
-import re
 import subprocess
 import sys
-from datetime import datetime
-from typing import Optional
 
 try:
-    from github import Github  # type: ignore
-except Exception:
+    from github import Github
+except ImportError:
     Github = None
 
-PLAN_MARKER = "Automated plan ("
-BRANCH_PREFIX = "scaffold/issue-"
-
-
 def ensure_pygithub() -> None:
+    """Ensures PyGithub is installed."""
     global Github
     if Github is not None:
         return
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "PyGithub>=2.3.0"])  # noqa: S603,S607
-    from github import Github as _Github  # type: ignore
-
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "PyGithub>=2.3.0"])
+    from github import Github as _Github
     Github = _Github
 
-
-def get_issue_number_from_event() -> Optional[int]:
-    event_name = os.environ.get("GITHUB_EVENT_NAME")
-    event_path = os.environ.get("GITHUB_EVENT_PATH")
-    if event_name and event_path and os.path.exists(event_path):
-        with open(event_path, "r", encoding="utf-8") as f:
-            event = json.load(f)
-        if event.get("issue") and event["issue"].get("number"):
-            return int(event["issue"]["number"])
-    val = os.environ.get("INPUT_ISSUE") or os.environ.get("ISSUE_NUMBER")
-    return int(val) if val else None
-
-
-def find_plan_text(issue) -> str:
-    # Look for latest plan comment
-    comments = list(issue.get_comments())
-    for comment in reversed(comments):
-        body = comment.body or ""
-        if PLAN_MARKER in body:
-            # Strip marker header
-            idx = body.find("\n\n")
-            return body[idx + 2 :].strip() if idx != -1 else body
-    # Fallback to issue body
-    return (issue.body or "No plan found. Add a plan via '/plan' first.").strip()
-
-
 def git(cmd: list[str]) -> str:
-    out = subprocess.check_output(cmd, text=True)
-    return out.strip()
-
+    """Executes a git command and returns its output."""
+    return subprocess.check_output(cmd, text=True).strip()
 
 def main() -> None:
+    """Main entry point for the script."""
+    parser = argparse.ArgumentParser(description="Scaffold from a feature plan.")
+    parser.add_argument("--branch", type=str, required=True, help="The feature branch with the plan.")
+    args = parser.parse_args()
+
     token = os.environ.get("GITHUB_TOKEN")
     if not token:
-        raise SystemExit("GITHUB_TOKEN missing")
-
-    ensure_pygithub()
+        raise SystemExit("GITHUB_TOKEN missing. Use POP_FLY_PAT for this script.")
 
     repo_slug = os.environ.get("GITHUB_REPOSITORY")
     if not repo_slug:
         raise SystemExit("GITHUB_REPOSITORY missing")
-    owner, repo_name = repo_slug.split("/", 1)
 
-    issue_number = get_issue_number_from_event()
-    if not issue_number:
-        raise SystemExit("No issue number found in event or inputs")
-
-    assert Github is not None, "PyGithub not initialized"
+    ensure_pygithub()
     gh = Github(token)
-    repo = gh.get_repo(f"{owner}/{repo_name}")
-    issue = repo.get_issue(number=issue_number)
+    repo = gh.get_repo(repo_slug)
 
-    base_branch = os.environ.get("BASE_BRANCH", os.environ.get("GITHUB_REF_NAME", "main"))
-    branch = f"{BRANCH_PREFIX}{issue_number}"
+    branch_name = args.branch
+    plan_path = "feature-plan.md"
 
-    # Prepare local git
-    git(["git", "config", "user.name", "github-actions"])
-    git(["git", "config", "user.email", "github-actions@users.noreply.github.com"])
-    git(["git", "fetch", "origin", base_branch])
-    git(["git", "checkout", "-B", branch, f"origin/{base_branch}"])
+    if not os.path.exists(plan_path):
+        print(f"Plan file '{plan_path}' not found on branch '{branch_name}'. Exiting.")
+        return
 
-    # Create or update a planning checklist file on the branch
-    plan_text = find_plan_text(issue)
-    planning_dir = os.path.join(".github", "scaffolds")
-    os.makedirs(planning_dir, exist_ok=True)
-    checklist_path = os.path.join(planning_dir, f"issue-{issue_number}.md")
+    with open(plan_path, "r", encoding="utf-8") as f:
+        plan_content = f.read()
 
-    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
-    content = f"""# Plan for Issue #{issue_number}: {issue.title}
+    # Use a generative AI to turn the plan into concrete file changes.
+    # Strategy:
+    # 1) Provide the plan and current project structure to the LLM.
+    # 2) Ask for a strict JSON response describing file edits to apply.
+    # 3) Apply safe changes only within src/, tests/, frontend/, or scripts/.
+    # 4) Commit and push edits back to the same branch.
 
-Generated: {timestamp}
+    from pathlib import Path  # local import to avoid top-level edits
+    import json  # local import to avoid top-level edits
 
-## Tasks
+    repo_root = Path(".").resolve()
+    allowed_dirs = [repo_root / "src", repo_root / "tests", repo_root / "frontend", repo_root / "scripts"]
 
-{plan_text}
+    def list_project_structure(root: Path) -> str:
+        lines = ["Project Structure (subset):"]
+        ignore = {".git", ".venv", "__pycache__", ".vscode", "node_modules", "dist"}
+        for p in sorted(root.rglob("*")):
+            if any(part in ignore for part in p.parts):
+                continue
+            try:
+                rel = p.relative_to(root)
+            except Exception:
+                continue
+            depth = len(rel.parts) - 1
+            indent = "  " * max(depth, 0)
+            lines.append(f"{indent}{rel.as_posix()}{'/' if p.is_dir() else ''}")
+        return "\n".join(lines)
 
----
-This PR scaffolds a checklist. Convert bullets into commits and code changes. Ensure unit tests pass.
-"""
-    with open(checklist_path, "w", encoding="utf-8") as f:
-        f.write(content)
+    def call_llm_for_changes(plan_md: str, structure: str) -> dict:
+        model = os.environ.get("PLAN_MODEL", "gpt-4-turbo-preview")
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            return {"changes": [], "note": "OPENAI_API_KEY not set; skipped generation."}
 
-    git(["git", "add", checklist_path])
-    # Commit only if there are staged changes
+        # Lazy import and install requests if missing
+        try:
+            import requests  # type: ignore
+        except Exception:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "requests>=2.31.0"])  # noqa: S603,S607
+            import requests  # type: ignore  # noqa: E402
+
+        system_prompt = (
+            "You are a senior software engineer. Convert the provided feature plan into concrete file edits.\n"
+            "Return ONLY valid JSON with this exact schema: {\"changes\": [ {\"path\": string, \"action\": \"create\"|\"update\", \"content\": string } ]}.\n"
+            "Rules: keep changes minimal; target only src/, tests/, frontend/, scripts/; do not delete files; include full file content for create/update; be consistent with Python 3.11 and existing project conventions."
+        )
+
+        user_prompt = (
+            "Feature Plan (Markdown):\n\n" + plan_md + "\n\n" +
+            "Repo structure: \n\n" + structure + "\n\n" +
+            "Produce JSON now."
+        )
+
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.2,
+            "max_tokens": 3000,
+        }
+
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        resp = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload, timeout=180)
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"]
+
+        # Some models might wrap JSON in code fences; strip if present
+        content = content.strip()
+        if content.startswith("```"):
+            # remove first fence line and last fence line if present
+            lines = [ln for ln in content.splitlines() if not ln.strip().startswith("```")]
+            content = "\n".join(lines).strip()
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            # Best-effort: if it returned non-JSON, skip generation
+            return {"changes": [], "note": "Model returned non-JSON; skipped generation."}
+        if not isinstance(data, dict) or "changes" not in data or not isinstance(data["changes"], list):
+            return {"changes": [], "note": "Unexpected schema; skipped generation."}
+        return data
+
+    structure = list_project_structure(repo_root)
+    llm_result = call_llm_for_changes(plan_content, structure)
+
+    applied_files: list[str] = []
+    for change in llm_result.get("changes", []):
+        try:
+            rel_path = str(change.get("path", "")).strip()
+            action = str(change.get("action", "")).strip().lower()
+            content = change.get("content", "")
+            if not rel_path or action not in {"create", "update"}:
+                continue
+            target = (repo_root / rel_path).resolve()
+            # Safety: must be under repo and within allowed dirs
+            if not str(target).startswith(str(repo_root)):
+                continue
+            if not any(str(target).startswith(str(ad)) for ad in allowed_dirs):
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            # Write full content for both create and update
+            with open(target, "w", encoding="utf-8", newline="") as wf:
+                wf.write(content)
+            applied_files.append(str(target.relative_to(repo_root)))
+        except Exception as e:
+            print(f"Skipping change due to error: {e}")
+
+    # Commit and push if there are changes
     try:
-        git(["git", "commit", "-m", f"Scaffold checklist for issue #{issue_number}"])
-    except subprocess.CalledProcessError:
-        # Nothing to commit
-        pass
+        status = git(["git", "status", "--porcelain"]).strip()
+        if status:
+            git(["git", "add", "-A"])
+            git(["git", "config", "user.name", "github-actions"])
+            git(["git", "config", "user.email", "github-actions@users.noreply.github.com"])
+            git(["git", "commit", "-m", "chore: scaffold code from feature plan"])
+            # Push back to the same branch
+            git(["git", "push", "origin", branch_name])
+    except subprocess.CalledProcessError as e:
+        print(f"Git commit/push failed: {e}")
 
-    git(["git", "push", "-u", "origin", branch])
-
-    # Open or update PR
-    prs = repo.get_pulls(state="open", head=f"{owner}:{branch}")
-    pr = None
-    for p in prs:
-        if p.head.ref == branch:
-            pr = p
-            break
-    title = f"Scaffold: {issue.title} (#{issue_number})"
-    body = (
-        f"This PR scaffolds tasks for #{issue_number}.\n\n"
-        "- Converts the plan into a checklist file under `.github/scaffolds/`.\n"
-        "- Please implement items, add tests, and ensure CI passes before merge.\n"
-    )
-    if pr:
-        pr.edit(title=title, body=body)
+    # Prepare PR content
+    pr_title = f"feat: Implement feature from plan '{branch_name}'"
+    if applied_files:
+        changed_list = "\n".join(f"- {p}" for p in applied_files)
+        pr_body = (
+            "This PR includes AI-scaffolded changes based on the plan.\n\n"
+            "Changed files:\n" + changed_list + "\n\n---\n\n" + plan_content
+        )
     else:
-        pr = repo.create_pull(title=title, body=body, head=branch, base=base_branch)
-    # Link issue
-    issue.create_comment(f"Scaffolded PR: #{pr.number}")
-    if "roadmap" not in [l.name for l in issue.get_labels()]:
-        issue.add_to_labels("roadmap")
+        note = llm_result.get("note", "No changes were generated.")
+        pr_body = (
+            f"No scaffolded changes were generated automatically ({note}).\n\n"
+            "Plan for reference:\n\n---\n\n" + plan_content
+        )
+    
+    try:
+        # Check if a PR already exists for this branch
+        existing_prs = repo.get_pulls(state='open', head=f'{repo.owner.login}:{branch_name}')
+        if existing_prs.totalCount > 0:
+            print(f"A pull request already exists for branch '{branch_name}'.")
+            # Optionally, update the existing PR
+            pr = existing_prs[0]
+            pr.edit(title=pr_title, body=pr_body)
+            print(f"Updated existing PR: {pr.html_url}")
+            return
 
-    print(f"Opened/updated PR #{pr.number} from {branch}")
+        pr = repo.create_pull(
+            title=pr_title,
+            body=pr_body,
+            head=branch_name,
+            base=repo.default_branch,
+        )
+        print(f"Created pull request: {pr.html_url}")
+    except Exception as e:
+        print(f"Failed to create or update pull request: {e}")
+        # This can happen if the branch is up-to-date with the base
+        # or other permission issues.
+        print("This might be because the branch has no new commits to merge.")
 
 
 if __name__ == "__main__":
