@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from importlib.metadata import PackageNotFoundError, version as pkg_version
+import subprocess
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
@@ -114,6 +115,23 @@ def main() -> None:
         port = int(port_str)
     except ValueError:
         port = 8000
+
+    # Optional: build frontend before starting the server so latest UI is served
+    if os.getenv("POP_FLY_SKIP_FRONTEND_BUILD", "0") != "1":
+        try:
+            project_root = Path(__file__).resolve().parents[3]
+            fe_dir = project_root / "frontend"
+            pkg_json = fe_dir / "package.json"
+            if pkg_json.is_file():
+                npm_exe = "npm.cmd" if os.name == "nt" else "npm"
+                lockfile = fe_dir / "package-lock.json"
+                install_cmd = [npm_exe, "ci"] if lockfile.is_file() else [npm_exe, "install"]
+                # Install deps (quiet-ish) and build
+                subprocess.run(install_cmd, cwd=str(fe_dir), check=False)
+                subprocess.run([npm_exe, "run", "build"], cwd=str(fe_dir), check=False)
+        except Exception:
+            # Non-fatal: continue to start API even if build fails
+            pass
     uvicorn.run("pop_fly.web.app:app", host=host, port=port, reload=False)
 
 

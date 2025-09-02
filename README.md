@@ -26,3 +26,12 @@ You can override the location for tests via POP_FLY_CONFIG_DIR.
 
 Web UI (local) — after installing web extras and building the frontend, run:
 - pop_fly_web, then open http://127.0.0.1:8000/
+
+Frontend auto-build before server start
+- The `pop_fly_web` command now attempts to build the frontend before starting the API so the latest UI is served from `frontend/dist`.
+- It runs `npm ci` (or `npm install` if no `package-lock.json`) and `npm run build` in `frontend/`.
+- To skip this step (e.g., when using the Vite dev server), set:
+
+  - PowerShell:
+    $Env:POP_FLY_SKIP_FRONTEND_BUILD = "1"; pop_fly_web
+
