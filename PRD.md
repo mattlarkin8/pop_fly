@@ -4,6 +4,8 @@ Version: 2.1
 Owner: You  
 Date: 2025-09-01
 
+See also: [ROADMAP.md](./ROADMAP.md) for planned features and upcoming milestones.
+
 ## summary
 A Python-based calculator for distance and direction between two points using MGRS numeric inputs (eastings/northings digits only), now with a local web UI and an HTTP API. Scope remains intentionally narrow: input is MGRS digits only for E/N (with optional elevation Z in meters); computation is planar Euclidean; output distance is meters; direction is NATO mils (6400 mils per circle). When both start and end elevations are provided, the tool also reports slant distance and delta Z. The tool assumes grid north equals true north for azimuth reporting. To keep operation simple and because our maximum computed distance is ≤4,000 m, MGRS zone and 100k grid square letters are intentionally ignored; both points are assumed to be within the same implicit 100k square.
 
