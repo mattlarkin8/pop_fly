@@ -1,0 +1,16 @@
+# Python cache, builds and virtual envs
+__pycache__/
+*.py[cod]
+.Python
+.venv/
+venv/
+# packaging/build metadata
+*.egg-info/
+build/
+dist/
+# VSCode
+.vscode/
+
+# Frontend (local installs and build output)
+frontend/node_modules/
+frontend/dist/

@@ -1,0 +1,29 @@
+name: Roadmap → Issues
+
+on:
+  push:
+    paths:
+      - 'ROADMAP.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run planner to create/update issues
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python -u scripts/roadmap_to_issues.py

@@ -1,0 +1,38 @@
+name: Implement (Guarded)
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      issue: { description: 'Issue number', required: false }
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  implement:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.comment.body, '/implement') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Prepare branch and PR template
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python -u scripts/scaffold_from_plan.py
+
+      - name: Safety note
+        run: |
+          echo "This guarded workflow only scaffolds a PR. Add commits manually or with a separate, approved tool."
