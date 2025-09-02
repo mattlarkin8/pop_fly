@@ -28,9 +28,25 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements-dev.txt ]; then python -m pip install -r requirements-dev.txt; else pip install PyGithub requests; fi
 
-      - name: Run docs generator
+      - name: Run docs generator (dry-run)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
+          python scripts/generate_docs.py --dry-run
+
+      - name: Upload dry-run artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-dryrun
+          path: tmp/docs-dryrun
+
+      - name: Conditional apply (disabled by default)
+        if: env.ALLOW_DOCS_AUTO_APPLY == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          echo "Auto-apply is enabled; running docs generator to create PR"
           python scripts/generate_docs.py
+        # To enable automatic apply, set the repository secret ALLOW_DOCS_AUTO_APPLY to "true"
