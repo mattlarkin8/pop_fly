@@ -16,17 +16,18 @@ from typing import Any, Dict
 MODEL = os.environ.get("PLAN_MODEL", "gpt-4o-mini")
 
 SYSTEM_PROMPT = """
-You are an expert software architect. Your task is to create a detailed, step-by-step plan to implement a new feature based on a high-level request.
+You are an expert software architect. Produce a minimal, surgical implementation plan for a feature.
 
-You will be given a high-level feature request and the current project structure.
+You will receive repository constraints and a scope profile (allowed files, budgets). Treat these as non-negotiable.
 
-Your plan should be in markdown format and include:
-1.  **Goal**: A brief explanation of the feature.
-2.  **File Changes**: A list of files to be created or modified. For each file, provide a concise summary of the necessary changes (e.g., new functions, updated classes, UI modifications).
-3.  **Testing**: A brief section on how to test the new feature, including suggestions for new unit tests or end-to-end tests.
-4.  **Risks**: Any potential risks or considerations.
+Your plan must be Markdown with sections:
+1. Goal
+2. File Changes (only in the allowed files; for each, list exact functions to edit and approximate line ranges)
+3. Testing (list exact assertions to change/remove and why)
+4. Risks
+5. Out of scope (explicitly restate forbidden changes from the profile)
 
-Keep the plan actionable and focused on implementation.
+Budget: do not exceed the profile's max files/lines. If you cannot meet it, explain why and stop (no expanded scope).
 """
 
 
@@ -84,7 +85,16 @@ def call_llm(prompt: str) -> str:
     return response.json()["choices"][0]["message"]["content"]
 
 
-def generate_plan(feature_request: str, plan_file: pathlib.Path, project_root: pathlib.Path):
+def load_policy(root: pathlib.Path) -> dict:
+    policy_path = root / ".github" / "automation_policy.json"
+    try:
+        import json
+        return json.loads(policy_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {"invariants": {}, "profiles": {"minor": {"allowed_files": [], "max_files": 4, "max_lines": 80}}}
+
+
+def generate_plan(feature_request: str, plan_file: pathlib.Path, project_root: pathlib.Path, profile: str = "minor"):
     """
     Generates a structured markdown plan using an AI.
 
@@ -93,8 +103,16 @@ def generate_plan(feature_request: str, plan_file: pathlib.Path, project_root: p
         plan_file: The path to the output plan file.
         project_root: The root directory of the project.
     """
+    policy = load_policy(project_root)
+    inv = policy.get("invariants", {})
+    prof = policy.get("profiles", {}).get(profile, {})
     project_structure = list_project_structure(project_root)
-    prompt = f"Feature Request: \"{feature_request}\"\n\n{project_structure}"
+    policy_snippet = json.dumps({"invariants": inv, "profile": prof}, indent=2)
+    prompt = (
+        f"Feature Request: \"{feature_request}\"\n\n"
+        f"Repository constraints and scope profile (JSON):\n{policy_snippet}\n\n"
+        f"{project_structure}"
+    )
     
     plan_content = call_llm(prompt)
 
@@ -108,11 +126,12 @@ def main():
     parser = argparse.ArgumentParser(description="Generate a feature plan using AI.")
     parser.add_argument("--request", type=str, required=True, help="High-level feature request.")
     parser.add_argument("--output", type=str, required=True, help="Output file for the plan.")
+    parser.add_argument("--profile", type=str, default="minor", choices=["minor", "moderate", "major"], help="Scope profile to use.")
     args = parser.parse_args()
 
     plan_file = pathlib.Path(args.output)
     project_root = pathlib.Path(__file__).parent.parent # Assumes script is in scripts/
-    generate_plan(args.request, plan_file, project_root)
+    generate_plan(args.request, plan_file, project_root, args.profile)
 
 
 if __name__ == "__main__":

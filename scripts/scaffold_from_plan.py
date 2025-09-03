@@ -13,6 +13,7 @@ import argparse
 import os
 import subprocess
 import sys
+import re
 
 try:
     from github import Github
@@ -47,6 +48,7 @@ def main() -> None:
         raise SystemExit("GITHUB_REPOSITORY missing")
 
     ensure_pygithub()
+    assert Github is not None, "PyGithub failed to import"
     gh = Github(token)
     repo = gh.get_repo(repo_slug)
 
@@ -72,6 +74,55 @@ def main() -> None:
 
     repo_root = Path(".").resolve()
     allowed_dirs = [repo_root / "src", repo_root / "tests", repo_root / "frontend", repo_root / "scripts"]
+    # Load policy
+    import json
+    policy_path = repo_root / ".github" / "automation_policy.json"
+    profile_name = os.environ.get("AUTOMATION_PROFILE", "minor")
+    try:
+        policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    except Exception:
+        policy = {"profiles": {"minor": {}}}
+    prof = policy.get("profiles", {}).get(profile_name, {})
+    # Enforce profile-level gating: some profiles (for example 'major') may
+    # require that a GitHub pull request already exists and is labeled before
+    # automated scaffolding may proceed. This prevents large-scope automation
+    # from running without explicit human sign-off.
+    required_label = prof.get("requires_label")
+    if required_label:
+        try:
+            existing_prs = repo.get_pulls(state='open', head=f'{repo.owner.login}:{branch_name}')
+        except Exception:
+            existing_prs = []
+        if not existing_prs or (hasattr(existing_prs, 'totalCount') and getattr(existing_prs, 'totalCount', 0) == 0):
+            print(
+                f"Profile '{profile_name}' requires an open PR labeled '{required_label}' for branch '{branch_name}'."
+                " Create a PR for the branch and add the label before running the scaffolder."
+            )
+            return
+        # Check labels on the first matching PR
+        pr = existing_prs[0]
+        try:
+            pr_labels = [lbl.name for lbl in pr.get_labels()]
+        except Exception:
+            # Fallback: PyGithub sometimes exposes .labels as an attribute
+            try:
+                pr_labels = [lbl.name for lbl in pr.labels]
+            except Exception:
+                pr_labels = []
+        if required_label not in pr_labels:
+            print(
+                f"Profile '{profile_name}' requires PR label '{required_label}' on PR #{getattr(pr, 'number', '?')} for branch '{branch_name}'. Aborting."
+            )
+            return
+    allowed_files_set = set((repo_root / p).resolve() for p in prof.get("allowed_files", []))
+    allowed_dirs_extra = [repo_root / p for p in prof.get("allowed_dirs", [])]
+    if allowed_dirs_extra:
+        allowed_dirs.extend(allowed_dirs_extra)
+    max_files = int(prof.get("max_files", 4))
+    max_total_lines = int(prof.get("max_lines", 80))
+    allow_new_files = bool(prof.get("allow_new_files", False))
+    forbidden_imports = list(prof.get("forbidden_imports", []))
+    forbidden_paths = set(prof.get("forbidden_paths", []))
 
     def list_project_structure(root: Path) -> str:
         lines = ["Project Structure (subset):"]
@@ -104,7 +155,9 @@ def main() -> None:
         system_prompt = (
             "You are a senior software engineer. Convert the provided feature plan into concrete file edits.\n"
             "Return ONLY valid JSON with this exact schema: {\"changes\": [ {\"path\": string, \"action\": \"create\"|\"update\", \"content\": string } ]}.\n"
-            "Rules: keep changes minimal; target only src/, tests/, frontend/, scripts/; do not delete files; include full file content for create/update; be consistent with Python 3.11 and existing project conventions."
+            "Rules: keep changes minimal; do not delete files; include full file content for create/update; Python 3.11.\n"
+            "Hard constraints: edit only src/pop_fly/core.py, src/pop_fly/web/app.py, tests/test_core.py, tests/test_api.py; no new files; no framework switches; no changes to dependencies or entry points; preserve public API and core symbols as-is.\n"
+            "Budget: ≤ 80 changed lines across ≤ 4 files. If you cannot meet this, return {\"changes\": []}."
         )
 
         user_prompt = (
@@ -147,6 +200,8 @@ def main() -> None:
     llm_result = call_llm_for_changes(plan_content, structure)
 
     applied_files: list[str] = []
+    total_lines_written = 0
+    change_count = 0
     for change in llm_result.get("changes", []):
         try:
             rel_path = str(change.get("path", "")).strip()
@@ -160,13 +215,75 @@ def main() -> None:
                 continue
             if not any(str(target).startswith(str(ad)) for ad in allowed_dirs):
                 continue
+            # Enforce strict allowed files and no file creation outside them
+            # Enforce allowed files/dirs per profile
+            if allowed_files_set:
+                if target not in allowed_files_set:
+                    continue
+            else:
+                # If no allowed_files specified, ensure it's under the allowed dirs
+                if not any(str(target).startswith(str(ad)) for ad in allowed_dirs):
+                    continue
+            # File creation policy
+            if action == "create" and not target.exists() and not allow_new_files:
+                continue
+            # Enforce budgets
+            change_count += 1
+            if change_count > max_files:
+                print("Skipping change: exceeds file count budget")
+                break
+            line_count = content.count("\n") + 1 if content else 0
+            if total_lines_written + line_count > max_total_lines:
+                print("Skipping change: exceeds line budget")
+                break
             target.parent.mkdir(parents=True, exist_ok=True)
             # Write full content for both create and update
             with open(target, "w", encoding="utf-8", newline="") as wf:
                 wf.write(content)
             applied_files.append(str(target.relative_to(repo_root)))
+            total_lines_written += line_count
         except Exception as e:
             print(f"Skipping change due to error: {e}")
+
+    # Quick static validations before commit
+    failures: list[str] = []
+    # Forbidden imports (Flask)
+    for path in applied_files:
+        p = repo_root / path
+        try:
+            txt = p.read_text(encoding="utf-8")
+        except Exception:
+            txt = ""
+        for bad in forbidden_imports:
+            if re.search(rf"\b{re.escape(bad)}\b", txt or "", flags=re.IGNORECASE):
+                failures.append(f"Forbidden import '{bad}' detected in {path}")
+    # Required symbols present after edits (best-effort)
+    core_txt = (repo_root / "src/pop_fly/core.py").read_text(encoding="utf-8")
+    if not re.search(r"def\s+compute_distance_bearing_xy\(", core_txt):
+        failures.append("compute_distance_bearing_xy is required in core.py")
+    if not re.search(r"def\s+_parse_pair_mgrs_digits\(", core_txt):
+        failures.append("_parse_pair_mgrs_digits is required in core.py")
+    web_txt = (repo_root / "src/pop_fly/web/app.py").read_text(encoding="utf-8")
+    if not re.search(r"FastAPI\(", web_txt) or not re.search(r"@app.post\(\"/api/compute\"\)", web_txt):
+        failures.append("FastAPI app or /api/compute endpoint missing in web/app.py")
+
+    # Guard against test deletions and dependency changes in working tree
+    try:
+        diff_name_status = git(["git", "diff", "--name-status"]).splitlines()
+    except Exception:
+        diff_name_status = []
+    for line in diff_name_status:
+        # Format: M	path or D	path
+        parts = line.split() if line else []
+        if len(parts) >= 2 and parts[0] == "D" and parts[1].startswith("tests/"):
+            failures.append("Deletion in tests/ is forbidden")
+        if len(parts) >= 2 and parts[1] in forbidden_paths and parts[0] != "":
+            failures.append(f"Changes to {parts[1]} are forbidden")
+
+    if failures:
+        print("\nValidation failures:\n- " + "\n- ".join(failures))
+        print("Aborting commit/push due to validation failures.")
+        return
 
     # Commit and push if there are changes
     try:
