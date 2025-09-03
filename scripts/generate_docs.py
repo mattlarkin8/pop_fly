@@ -181,8 +181,9 @@ def apply_ops_to_markdown(original: str, ops: List[Dict[str, Any]], file_label: 
     if not ops:
         return original, warnings, errors
 
-    if len(ops) > 10:  # global cap safety
-        errors.append(f"{file_label}: too many ops ({len(ops)})")
+    # Enforce conservative limit of at most 6 operations per file (matches docs automation rules)
+    if len(ops) > 6:
+        errors.append(f"{file_label}: too many ops ({len(ops)}); max 6 per file")
         return original, warnings, errors
 
     lines = original.splitlines()
@@ -339,8 +340,11 @@ def main() -> None:
         return
 
     pr_number = int(pr["number"])
-    pr_obj = repo.get_pull(pr_number)
-    changed_files = [f.filename for f in pr_obj.get_files()]
+    pr_obj = repo.get_pull(pr_number) if repo is not None else None
+    changed_files = [f.filename for f in pr_obj.get_files()] if pr_obj is not None else []
+    # Prefer API values when available, fall back to event payload for dry-run/local use
+    pr_title = pr_obj.title if pr_obj is not None else pr.get("title", "")
+    pr_body = (pr_obj.body or "") if pr_obj is not None else (pr.get("body") or "")
 
     # Read current docs to include as context
     readme_path = os.path.join(os.getcwd(), "README.md")
@@ -349,7 +353,7 @@ def main() -> None:
     prd_text = open(prd_path, "r", encoding="utf-8").read() if os.path.exists(prd_path) else ""
 
     # Ask LLM for doc updates (structured ops)
-    llm_result = call_llm_for_docs(pr_obj.title, pr_obj.body or "", changed_files, readme_text, prd_text)
+    llm_result = call_llm_for_docs(pr_title, pr_body, changed_files, readme_text, prd_text)
     docs = llm_result.get("docs", [])
     note = llm_result.get("note")
 
@@ -378,9 +382,11 @@ def main() -> None:
     # Create a branch (skip if dry-run)
     ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
     branch = f"docs/update-pr-{pr_number}-{ts}"
-    if not dry_run:
-        git(["git", "fetch", "origin", "main"])
-        git(["git", "checkout", "-b", branch, "origin/main"])
+    if not dry_run and repo is not None:
+        # Use the repository's default branch instead of hardcoding 'main'
+        default_branch = repo.default_branch
+        git(["git", "fetch", "origin", default_branch])
+        git(["git", "checkout", "-b", branch, f"origin/{default_branch}"])
     else:
         print(f"DRY-RUN: would create branch {branch}")
 
@@ -438,7 +444,7 @@ def main() -> None:
         applied.append(path)
 
     if applied:
-        if not dry_run:
+        if not dry_run and repo is not None:
             git(["git", "add", "-A"])
             git(["git", "config", "user.name", "github-actions"])
             git(["git", "config", "user.email", "github-actions@users.noreply.github.com"])
@@ -446,7 +452,7 @@ def main() -> None:
             git(["git", "push", "origin", branch])
 
             # Create PR
-            title = f"docs: update docs for PR #{pr_number} — {pr_obj.title}"
+            title = f"docs: update docs for PR #{pr_number} — {pr_title}"
             # Build a short diff preview for body
             body_lines = [
                 f"Automated documentation updates based on merged PR #{pr_number}.",
@@ -471,10 +477,13 @@ def main() -> None:
                 except Exception as _e:
                     # Non-fatal: label may not exist or API call may fail due to permissions
                     print(f"Warning: could not add 'docs' label to PR #{new_pr.number}: {_e}")
-                pr_obj.create_issue_comment(f"Automated docs PR created: #{new_pr.number}")
+                if repo is not None and pr_obj is not None:
+                    pr_obj.create_issue_comment(f"Automated docs PR created: #{new_pr.number}")
                 print(f"Created docs PR: {new_pr.html_url}")
             except Exception as e:
                 print("Failed to create docs PR:", e)
+        elif not dry_run and repo is None:
+            print("Repository handle is unavailable; cannot commit or open PR.")
         else:
             # Write diffs to tmp/docs-dryrun
             out_dir = os.path.join(os.getcwd(), "tmp", "docs-dryrun")

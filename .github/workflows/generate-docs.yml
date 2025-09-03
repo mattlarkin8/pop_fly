@@ -2,8 +2,8 @@ name: Generate Documentation PR
 
 on:
   pull_request:
-    # Run when commits are pushed to a PR or the PR is opened/reopened
-    types: [synchronize, opened, reopened]
+    # Run when a PR is merged to main. We want to generate docs updates for the accepted changes.
+    types: [closed]
 
 permissions:
   contents: write
@@ -11,8 +11,8 @@ permissions:
 
 jobs:
   gen-docs:
-    # Exclude PRs that already carry any docs-related label (e.g. 'docs' or 'docs:auto')
-    if: ${{ !contains(join(github.event.pull_request.labels.*.name, ','), 'docs') }}
+    # Run only for merged PRs and skip PRs already labeled with 'docs' to avoid automation loops.
+    if: ${{ github.event.pull_request.merged == true && !contains(join(github.event.pull_request.labels.*.name, ','), 'docs') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
