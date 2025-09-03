@@ -74,12 +74,13 @@ def call_llm_for_docs(
         "Given a merged PR, its changed files, and the current contents of README.md and PRD.md, propose small updates. "
         "Return ONLY valid minified JSON following this schema: "
         '{"docs":[{"path":"README.md"|"PRD.md","ops":['
-        '  {"type":"replace_section","heading":string,"content":string}|'
-        '  {"type":"append_to_section","heading":string,"content":string}|'
-        '  {"type":"upsert_section","heading":string,"level":2|3|4|5|6,"content":string}|'
+        '  {"type":"replace_section","heading":string,"content":string,"occurrence"?:integer}|'
+        '  {"type":"append_to_section","heading":string,"content":string,"occurrence"?:integer}|'
+        '  {"type":"upsert_section","heading":string,"level":2|3|4|5|6,"content":string,"occurrence"?:integer}|'
         '  {"type":"replace_block_by_marker","name":string,"content":string}'
         ']}]}'
-        " Rules: Modify only existing sections or explicit markers. Do not rewrite entire files. Maintain headings and style. Limit to at most 6 ops per file."
+        " Rules: Keep edits minimal and localized; do not rewrite entire files. If a heading appears multiple times, include an integer 'occurrence' (1-based) to disambiguate which section to edit. "
+        "When 'occurrence' is omitted and a heading is duplicated, the first instance will be edited. Limit to at most 6 ops per file."
     )
 
     user = (
@@ -149,11 +150,21 @@ def _parse_headings(lines: List[str]) -> List[Heading]:
     return headings
 
 
-def _find_unique_heading(headings: List[Heading], title: str) -> Optional[Heading]:
+def _find_heading(headings: List[Heading], title: str, occurrence: Optional[int] = None) -> Tuple[Optional[Heading], int]:
+    """Find a heading by title and optional occurrence (1-based).
+
+    Returns (heading, match_count). If no heading found, returns (None, 0).
+    If multiple found and occurrence is None or out of range, defaults to first.
+    """
     matches = [h for h in headings if h[1] == title]
-    if len(matches) == 1:
-        return matches[0]
-    return None
+    if not matches:
+        return None, 0
+    if occurrence is None:
+        return matches[0], len(matches)
+    idx = max(1, int(occurrence)) - 1
+    if idx >= len(matches):
+        return matches[-1], len(matches)
+    return matches[idx], len(matches)
 
 
 def _section_span(lines: List[str], headings: List[Heading], target: Heading) -> Tuple[int, int, int]:
@@ -237,7 +248,12 @@ def apply_ops_to_markdown(original: str, ops: List[Dict[str, Any]], file_label: 
 
         # Recompute headings each time in case structure changes
         headings = _parse_headings(edited_lines)
-        target = _find_unique_heading(headings, heading_title)
+        occurrence = op.get("occurrence")
+        try:
+            occurrence_val: Optional[int] = int(occurrence) if occurrence is not None else None
+        except (ValueError, TypeError):
+            occurrence_val = None
+        target, match_count = _find_heading(headings, heading_title, occurrence_val)
 
         if op_type == "upsert_section" and target is None:
             level = int(op.get("level", 2))
@@ -248,8 +264,13 @@ def apply_ops_to_markdown(original: str, ops: List[Dict[str, Any]], file_label: 
             continue
 
         if target is None:
-            warnings.append(f"{file_label}: heading '{heading_title}' not uniquely found; op[{idx}] skipped")
+            warnings.append(f"{file_label}: heading '{heading_title}' not found; op[{idx}] skipped")
             continue
+
+        if match_count > 1 and occurrence_val is None:
+            warnings.append(
+                f"{file_label}: heading '{heading_title}' appears {match_count} times; op[{idx}] defaulted to first occurrence"
+            )
 
         h_start, content_start, h_end = _section_span(edited_lines, headings, target)
 
@@ -445,7 +466,29 @@ def main() -> None:
 
     if applied:
         if not dry_run and repo is not None:
+            # Stage any changes first
             git(["git", "add", "-A"])
+
+            # Skip commit if there are no staged changes
+            try:
+                staged_check = subprocess.run(["git", "diff", "--cached", "--quiet"])
+            except FileNotFoundError:
+                print("Error: 'git' command not found. Ensure git is installed and available in PATH.")
+                return
+            except Exception as e:
+                print(f"Error running 'git diff --cached --quiet': {e}")
+                return
+            if staged_check.returncode == 0:
+                print("No documentation changes to commit; skipping commit/PR creation.")
+                if pr_obj is not None:
+                    try:
+                        pr_obj.create_issue_comment(
+                            "Docs automation ran but produced no changes (no matching sections or edits)."
+                        )
+                    except Exception as _e:
+                        print(f"Warning: could not post 'no changes' comment: {_e}")
+                return
+
             git(["git", "config", "user.name", "github-actions"])
             git(["git", "config", "user.email", "github-actions@users.noreply.github.com"])
             git(["git", "commit", "-m", f"docs: update README/PRD for PR #{pr_number}"])
