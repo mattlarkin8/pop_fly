@@ -84,7 +84,7 @@ Common env vars for automation
 - `PLAN_MODEL`: model override for scripts (defaults set inside scripts; e.g., `gpt-4o-mini`).
 - `DRY_RUN=1`: where supported, prevents writes and saves artifacts under `tmp/`.
 
-- The `generate-docs` workflow now includes a required manual input `pr_number` for better tracking of documentation changes.
+- The `generate-docs` workflow now includes a workflow_dispatch that allows for manual runs. A manual run requires an input `pr_number` to select which PR to run the workflow on.
 
 ### Notes
 
