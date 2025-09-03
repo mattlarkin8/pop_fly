@@ -161,9 +161,7 @@ def _find_heading(headings: List[Heading], title: str, occurrence: Optional[int]
         return None, 0
     if occurrence is None:
         return matches[0], len(matches)
-    idx = max(1, int(occurrence)) - 1
-    if idx >= len(matches):
-        return matches[-1], len(matches)
+        return matches[0], len(matches)
     return matches[idx], len(matches)
 
 
