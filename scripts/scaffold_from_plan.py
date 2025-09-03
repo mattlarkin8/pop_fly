@@ -75,7 +75,6 @@ def main() -> None:
     repo_root = Path(".").resolve()
     allowed_dirs = [repo_root / "src", repo_root / "tests", repo_root / "frontend", repo_root / "scripts"]
     # Load policy
-    import json
     policy_path = repo_root / ".github" / "automation_policy.json"
     profile_name = os.environ.get("AUTOMATION_PROFILE", "minor")
     try:
