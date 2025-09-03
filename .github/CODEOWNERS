@@ -1,0 +1,7 @@
+# Require maintainer review for core, web, tests, and packaging
+src/pop_fly/core.py @mattlarkin8
+src/pop_fly/web/app.py @mattlarkin8
+tests/* @mattlarkin8
+pyproject.toml @mattlarkin8
+frontend/** @mattlarkin8
+scripts/** @mattlarkin8

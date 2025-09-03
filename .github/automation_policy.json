@@ -1,0 +1,72 @@
+{
+  "invariants": {
+    "framework": "fastapi",
+    "require_endpoints": [
+      "/api/compute:POST",
+      "/api/health:GET",
+      "/api/version:GET"
+    ],
+    "core_symbols": [
+      "Result",
+      "_parse_pair_mgrs_digits",
+      "compute_distance_bearing_xy",
+      "_deg_to_mils"
+    ],
+    "units": "meters",
+    "azimuth": "mils_0.1"
+  },
+  "profiles": {
+    "minor": {
+      "allowed_files": [
+        "src/pop_fly/core.py",
+        "src/pop_fly/web/app.py",
+        "tests/test_core.py",
+        "tests/test_api.py"
+      ],
+      "allowed_dirs": [],
+      "max_files": 4,
+      "max_lines": 80,
+      "allow_new_files": false,
+      "forbidden_imports": ["flask"],
+      "forbidden_paths": ["pyproject.toml"],
+      "tests": {
+        "allow_delete": false,
+        "allowed_change_patterns": ["slant", "delta_z"]
+      }
+    },
+    "moderate": {
+      "allowed_files": [
+        "src/pop_fly/core.py",
+        "src/pop_fly/web/app.py",
+        "src/pop_fly/cli.py",
+        "tests/test_core.py",
+        "tests/test_api.py",
+        "tests/test_cli.py"
+      ],
+      "allowed_dirs": [],
+      "max_files": 8,
+      "max_lines": 200,
+      "allow_new_files": false,
+      "forbidden_imports": ["flask"],
+      "forbidden_paths": ["pyproject.toml"],
+      "tests": {
+        "allow_delete": false,
+        "allowed_change_patterns": ["slant", "delta_z", "precision", "format"]
+      }
+    },
+    "major": {
+      "allowed_files": [],
+      "allowed_dirs": ["src/pop_fly", "tests", "frontend"],
+      "max_files": 30,
+      "max_lines": 1000,
+      "allow_new_files": true,
+      "forbidden_imports": [],
+      "forbidden_paths": [],
+      "tests": {
+        "allow_delete": true,
+        "allowed_change_patterns": []
+      },
+      "requires_label": "arch-change"
+    }
+  }
+}
