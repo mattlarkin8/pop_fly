@@ -58,13 +58,19 @@ def parse_roadmap(md: str) -> List[RoadmapItem]:
         if section and ITEM_RE.match(line):
             # Parse main bullet as title and capture following indented sub-bullets
             main = ITEM_RE.match(line).group(1)  # type: ignore
-            # Detect status emoji or word inside parentheses
+            # Detect status emoji or word inside trailing parentheses, e.g. "Feature (🟡)" or "Feature (In progress)"
             status = ""
-            if "(🟢" in main or "(🟡" in main or "(⚪" in main:
-                status = main.split("(")[-1].split(")")[0]
-                title = main.split("(")[0].strip()
-            else:
-                title = main
+            title = main
+            # Remove inline issue reference like "#123" before matching parentheses
+            main_no_ref = ISSUE_REF_RE.sub("", main).strip()
+            m_paren = re.match(r"^(.*)\s*\(([^)]+)\)\s*(?:#\d+)?\s*$", main_no_ref)
+            if m_paren:
+                inside = m_paren.group(2).strip()
+                candidate_title = m_paren.group(1).strip()
+                # If the parenthesized part looks like an emoji status or known status word, treat it as status
+                if any(e in inside for e in ("🟢", "🟡", "⚪")) or inside.lower() in {"done", "in progress", "planned"}:
+                    status = inside
+                    title = candidate_title
             # Collect sub-bullets as body until next top-level bullet or section
             body_lines: List[str] = []
             j = i + 1
@@ -83,13 +89,14 @@ def parse_roadmap(md: str) -> List[RoadmapItem]:
             if m_issue:
                 issue_ref = int(m_issue.group(1))
 
-            # Normalize status
+            # Normalize status to one of Done / In progress / Planned
             status_word = "Planned"
-            if "🟢" in status:
+            s_low = (status or "").lower()
+            if "🟢" in status or s_low == "done":
                 status_word = "Done"
-            elif "🟡" in status:
+            elif "🟡" in status or s_low == "in progress":
                 status_word = "In progress"
-            elif "⚪" in status:
+            elif "⚪" in status or s_low == "planned":
                 status_word = "Planned"
 
             items.append(RoadmapItem(section=section, title=title, body=body, status=status_word, issue_ref=issue_ref))
@@ -135,11 +142,23 @@ def upsert_issues(items: Iterable[RoadmapItem]) -> None:
     gh = Github(token)
     repo = gh.get_repo(f"{owner}/{repo_name}")
 
-    # Ensure labels
-    wanted_labels = {"roadmap", "Now", "Next", "Later"}
+    # Ensure labels (sections + status)
+    status_labels = {"Done", "In progress", "Planned"}
+    wanted_labels = {"roadmap", "Now", "Next", "Later"} | status_labels
     existing = {l.name for l in repo.get_labels()}
+    # Color mapping for new labels (sensible defaults)
+    label_colors = {
+        "roadmap": "0e8a16",
+        "Now": "0e8a16",
+        "Next": "0052cc",
+        "Later": "6f42c1",
+        "Done": "0e8a16",
+        "In progress": "dbab09",
+        "Planned": "6a737d",
+    }
     for lab in wanted_labels - existing:
-        repo.create_label(name=lab, color="0e8a16")
+        color = label_colors.get(lab, "6a737d")
+        repo.create_label(name=lab, color=color)
 
     # Build title -> issue map for idempotency
     existing_issues = list(repo.get_issues(state="open")) + list(repo.get_issues(state="closed"))
@@ -147,9 +166,8 @@ def upsert_issues(items: Iterable[RoadmapItem]) -> None:
     by_number = {iss.number: iss for iss in existing_issues}
 
     for it in items:
-        if it.status == "Done":
-            # Skip creating for done items
-            continue
+        # Determine the desired status label for this item
+        status_label = it.status
 
         target_issue = None
         if it.issue_ref and it.issue_ref in by_number:
@@ -164,16 +182,25 @@ def upsert_issues(items: Iterable[RoadmapItem]) -> None:
             "\nSource: ROADMAP.md",
         ]
         body = "\n".join(body_parts).strip()
-        labels = ["roadmap", it.section]
+        # Build label set: preserve unrelated existing labels, but ensure roadmap/section/status are present
+        desired_base = {"roadmap", it.section, status_label}
 
         if target_issue:
-            # Update labels and body; reopen if closed
             existing_labels = {l.name for l in target_issue.get_labels()}
-            new_labels = sorted(set(labels) | existing_labels)
-            target_issue.edit(body=body, labels=new_labels, state="open")
+            # Remove any old status labels to avoid stale statuses
+            cleaned = existing_labels - status_labels
+            new_labels = sorted(cleaned | desired_base)
+            # If item is Done, close the issue; otherwise ensure it is open
+            new_state = "closed" if status_label == "Done" else "open"
+            target_issue.edit(body=body, labels=new_labels, state=new_state)
         else:
-            target_issue = repo.create_issue(title=it.title.strip(), body=body, labels=labels)
-        print(f"Upserted issue #{target_issue.number}: {target_issue.title}")
+            # Create with labels; created issue is open by default
+            target_issue = repo.create_issue(title=it.title.strip(), body=body, labels=sorted(desired_base))
+            # Immediately close if roadmap marks it Done
+            if status_label == "Done":
+                target_issue.edit(state="closed")
+
+        print(f"Upserted issue #{target_issue.number}: {target_issue.title} (status={status_label})")
 
 
 def main() -> None:
