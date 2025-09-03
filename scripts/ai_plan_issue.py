@@ -86,7 +86,7 @@ def validate_plan_schema(plan_text: str) -> Tuple[bool, Optional[str]]:
     return True, None
 
 
-def get_issue_context(dry_run: bool = False) -> tuple[int, Optional[str], Optional[str]]:
+def get_issue_context(dry_run: bool = False) -> tuple[Optional[int], Optional[str], Optional[str]]:
     """Return (issue_number, owner, repo_name).
 
     In non-dry-run mode we require GITHUB_REPOSITORY and an issue number. In
