@@ -477,7 +477,7 @@ def main() -> None:
                 except Exception as _e:
                     # Non-fatal: label may not exist or API call may fail due to permissions
                     print(f"Warning: could not add 'docs' label to PR #{new_pr.number}: {_e}")
-                if pr_obj is not None:
+                if repo is not None and pr_obj is not None:
                     pr_obj.create_issue_comment(f"Automated docs PR created: #{new_pr.number}")
                 print(f"Created docs PR: {new_pr.html_url}")
             except Exception as e:
