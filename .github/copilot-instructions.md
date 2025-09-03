@@ -74,3 +74,12 @@ Local dev setup (recommended):
 - The library intentionally ignores MGRS zone and 100k letters — inputs are only the numeric digits. Ensure callers provide values in the same implicit 100k grid.
 - Elevation (Z) must be provided for both start and end to compute slant and ΔZ; otherwise only horizontal distance and azimuth are returned.
 - Azimuth uses grid-as-true convention; this is documented in PRD and used throughout code/tests.
+
+## Issue comment safeguards
+
+- Before posting an automation-triggering comment (for example `/plan` or `/implement`), read the issue's recent comments and skip posting if any of the following are true:
+  - A recent comment (last 24 hours) is exactly `/plan` or `/implement`.
+  - A recent comment contains the string `Automated plan (` indicating the workflow already produced a plan.
+- Debounce: if the assistant itself posted a `/plan` within the last 2 minutes, do not post again automatically.
+- Single-responsibility: post at most one trigger comment per issue unless explicitly asked to retry; wait for the workflow result and show the maintainer the generated plan before re-triggering.
+- When a skip occurs, post a single informative comment (once) explaining why the trigger was skipped and what the user can do to force a rerun (for example, add a comment `force:/plan` or re-run the workflow).
