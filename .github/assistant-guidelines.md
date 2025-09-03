@@ -116,3 +116,27 @@ How I will reference this
 
 - When you ask me to perform automation, I will follow these rules and (unless you say otherwise) prefer stepwise execution and optional dry-run first.
 - If you prefer a faster single-line approach for any particular step, say so explicitly and I will do it for that step only.
+
+Documentation editing rules (Markdown)
+
+- Scope
+    - Default docs to edit are `README.md` and `PRD.md` unless otherwise requested.
+    - Prefer targeted, section-level changes; do not rewrite entire documents.
+
+- Allowed operations (mirror automation in `scripts/generate_docs.py`)
+    - replace_section(heading, content)
+    - append_to_section(heading, content)
+    - upsert_section(heading, level=2..6, content)
+    - replace_block_by_marker(name, content) using markers `<!-- AUTO-DOC:NAME -->` and `<!-- /AUTO-DOC:NAME -->`
+    - Operate only on unique headings; if ambiguous, skip or create a new section via upsert.
+
+- Constraints and safety checks
+    - Max 6 ops per file in a single update; split larger updates across separate commits/PRs.
+    - Preserve heading text and hierarchy; maintain surrounding blank lines and code-fence integrity.
+    - Don’t reduce a file by >40% in a single change; large deletions need human review.
+    - Keep relative links and anchors stable; update them only when the target actually changed.
+    - Use Windows-friendly PowerShell examples where relevant to this repo; one command per line.
+
+- Review artifacts
+    - Produce a concise unified diff in PRs or logs; surface any warnings like missing markers or non-unique headings.
+    - When applicable, validate against `docs/schema/docs_ops.json` and ensure structured outputs parse cleanly.

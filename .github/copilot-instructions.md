@@ -83,3 +83,32 @@ Local dev setup (recommended):
 - Debounce: if the assistant itself posted a `/plan` within the last 2 minutes, do not post again automatically.
 - Single-responsibility: post at most one trigger comment per issue unless explicitly asked to retry; wait for the workflow result and show the maintainer the generated plan before re-triggering.
 - When a skip occurs, post a single informative comment (once) explaining why the trigger was skipped and what the user can do to force a rerun (for example, add a comment `force:/plan` or re-run the workflow).
+
+## Documentation editing rules (README.md, PRD.md)
+
+These rules align with our docs automation (see `scripts/generate_docs.py`) and should be followed for any manual or automated edits to Markdown docs.
+
+- Scope and targets
+  - Default targets are `README.md` and `PRD.md`. Avoid editing other docs unless explicitly requested.
+  - Prefer editing only specific sections or explicit marker blocks; do not rewrite entire files.
+
+- Allowed operations (structured)
+  - Use heading/marker-based ops that mirror automation capabilities:
+    - replace_section(heading, content)
+    - append_to_section(heading, content)
+    - upsert_section(heading, level, content)
+    - replace_block_by_marker(name, content) using markers: `<!-- AUTO-DOC:NAME -->` ... `<!-- /AUTO-DOC:NAME -->`
+  - Operate only on uniquely named headings; if a heading isn’t unique, don’t guess—skip or upsert a new section instead.
+
+- Safety and style constraints
+  - Keep changes minimal and localized; preserve heading text, hierarchy, and surrounding formatting.
+  - Limit to at most 6 operations per file in one pass (be conservative to ease review).
+  - Don’t shrink a file by more than ~40%; large deletions require human review and explicit approval.
+  - Maintain existing tone and style; keep relative links intact; don’t alter anchors unless necessary.
+  - Preserve code fences and languages; for Windows examples, prefer PowerShell syntax and separate commands per line.
+  - Avoid placeholders like “TBD”/“TODO”; prefer concrete, testable statements or omit.
+
+- Validation and parity with automation
+  - When producing machine-readable edits, conform to the JSON schema in `docs/schema/docs_ops.json` and the op types above.
+  - Prefer marker replacements for recurring, auto-managed blocks.
+  - After edits, generate a small unified diff for review; summarize warnings (e.g., skipped ambiguous headings).
