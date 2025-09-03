@@ -79,8 +79,45 @@ def ensure_pygithub() -> None:
 
     Github = _Github
 
+def _parse_event_issue(event_path: str) -> Optional[int]:
+    if not event_path or not os.path.exists(event_path):
+        return None
+    with open(event_path, "r", encoding="utf-8") as f:
+        event = json.load(f)
+    if event.get("issue") and event["issue"].get("number"):
+        return int(event["issue"]["number"])
+    return None
 
-def get_issue_context(dry_run: bool = False) -> tuple[int, Optional[str], Optional[str]]:
+
+def validate_plan_schema(plan_text: str) -> Tuple[bool, Optional[str]]:
+    """Validate LLM-produced plan text against docs/schema/plan_schema.json if present.
+
+    If schema is missing, returns (True, None). If schema exists, expects the plan to be valid JSON matching schema.
+    """
+    schema_path = os.path.join(os.getcwd(), "docs", "schema", "plan_schema.json")
+    if not os.path.exists(schema_path):
+        return True, None
+    try:
+        from jsonschema import validate, ValidationError  # type: ignore
+    except Exception:
+        return True, "jsonschema not installed; skipping schema validation"
+
+    try:
+        payload = json.loads(plan_text)
+    except json.JSONDecodeError:
+        return False, "Model output is not valid JSON but schema exists at docs/schema/plan_schema.json"
+
+    with open(schema_path, "r", encoding="utf-8") as f:
+        schema = json.load(f)
+    try:
+        validate(instance=payload, schema=schema)
+    except ValidationError as e:
+        return False, str(e)
+    return True, None
+
+
+def get_issue_context(dry_run: bool = False) -> tuple[Optional[int], Optional[str], Optional[str]]:
+
     """Return (issue_number, owner, repo_name).
 
     In non-dry-run mode we require GITHUB_REPOSITORY and an issue number. In
@@ -92,15 +129,8 @@ def get_issue_context(dry_run: bool = False) -> tuple[int, Optional[str], Option
 
     # Default to the issue from the comment event (if available)
     issue_number: Optional[int] = None
-    event_name = os.environ.get("GITHUB_EVENT_NAME")
-    event_path = os.environ.get("GITHUB_EVENT_PATH")
-    if event_name and event_path and os.path.exists(event_path):
-        with open(event_path, "r", encoding="utf-8") as f:
-            event = json.load(f)
-        if event.get("issue") and event["issue"].get("number"):
-            issue_number = int(event["issue"]["number"])
+    issue_number = _parse_event_issue(os.environ.get("GITHUB_EVENT_PATH"))
 
-    # allow manual override via input
     if not issue_number:
         try:
             issue_number = int(os.environ.get("ISSUE_NUMBER", "0")) or None
@@ -230,7 +260,10 @@ def main() -> None:
     else:
         out_dir = os.path.join(os.getcwd(), "tmp", "ai-plan-dryrun")
         os.makedirs(out_dir, exist_ok=True)
-        out_file = os.path.join(out_dir, f"issue-{issue_number}-plan.txt")
+        
+        file_issue_part = f"{issue_number}" if issue_number != 0 else "unknown"
+        out_file = os.path.join(out_dir, f"issue-{file_issue_part}-plan.txt")
+
         with open(out_file, "w", encoding="utf-8") as f:
             f.write(comment)
         print(f"DRY-RUN: wrote plan to {out_file}")
