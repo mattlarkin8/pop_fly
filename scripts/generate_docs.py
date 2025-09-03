@@ -247,9 +247,7 @@ def apply_ops_to_markdown(original: str, ops: List[Dict[str, Any]], file_label: 
         # Recompute headings each time in case structure changes
         headings = _parse_headings(edited_lines)
         occurrence = op.get("occurrence")
-        try:
-            occurrence_val: Optional[int] = int(occurrence) if occurrence is not None else None
-        except Exception:
+        except (ValueError, TypeError):
             occurrence_val = None
         target, match_count = _find_heading(headings, heading_title, occurrence_val)
 
