@@ -1,4 +1,0 @@
-Automated plan (2025-09-03 02:29 UTC):
-
-No LLM key configured. Skipping plan generation.
-Set OPENAI_API_KEY or ANTHROPIC_API_KEY secrets to enable.
