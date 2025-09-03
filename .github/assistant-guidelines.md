@@ -124,11 +124,11 @@ Documentation editing rules (Markdown)
     - Prefer targeted, section-level changes; do not rewrite entire documents.
 
 - Allowed operations (mirror automation in `scripts/generate_docs.py`)
-    - replace_section(heading, content)
-    - append_to_section(heading, content)
-    - upsert_section(heading, level=2..6, content)
-    - replace_block_by_marker(name, content) using markers `<!-- AUTO-DOC:NAME -->` and `<!-- /AUTO-DOC:NAME -->`
-    - Operate only on unique headings; if ambiguous, skip or create a new section via upsert.
+  - replace_section(heading, content)
+  - append_to_section(heading, content)
+  - upsert_section(heading, level=2..6, content)
+  - replace_block_by_marker(name, content) using markers `<!-- AUTO-DOC:NAME -->` and `<!-- /AUTO-DOC:NAME -->`
+  - Operate only on unique headings; if ambiguous, skip or create a new section via upsert.
 
 - Constraints and safety checks
     - Max 6 ops per file in a single update; split larger updates across separate commits/PRs.
