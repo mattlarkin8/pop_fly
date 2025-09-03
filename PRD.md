@@ -75,12 +75,14 @@ Example scenarios:
   - `pop_fly --start "037,050,50" --end "051,070,130"` (horizontal + slant)
 
 5. http api (new) 
-  - Framework: FastAPI; bind local-only (127.0.0.1:8000).
+  - Framework: FastAPI; bind local-only (defaults to 127.0.0.1:8000; override with POP_FLY_HOST / POP_FLY_PORT).
   - Endpoints:
     - `POST /api/compute` → request `{ start: [..], end: [..], precision?: int }` → response JSON as described above with rounding.
     - `GET /api/health` → `{ "status": "ok" }`.
     - `GET /api/version` → `{ "version": "x.y.z" }`.
-  - Validation: start and end must be arrays of length 2 or 3; E/N entries must be numeric strings (recommended, to preserve leading zeros) or numbers and represent 1–5 digits prior to expansion; values must be finite; 400 on invalid input.
+  - Validation: start and end must be arrays of length 2 or 3; E/N entries must be numeric strings (recommended, to preserve leading zeros) or numbers representing 1–5 digits prior to expansion; values must be finite.
+    - Shape/type errors are rejected by Pydantic with HTTP 422.
+    - Business-rule errors (e.g., non-digit E/N tokens, out-of-range lengths) are returned as HTTP 400 with a message.
   - Static hosting: production build of the frontend served at `/` and assets at `/assets/*` by FastAPI.
 
 6. web ui (new) 
@@ -143,6 +145,7 @@ Example scenarios:
 ### web architecture
 - FastAPI serves API routes and, in production, the built React app.
 - Dev mode uses Vite dev server with proxy to FastAPI for `/api/*`.
+- On server startup, the backend attempts to build the frontend (runs `npm ci` or `npm install` and `npm run build` in `frontend/`); skip via `POP_FLY_SKIP_FRONTEND_BUILD=1`.
 - Persistence for default start in Web UI uses browser localStorage only.
 
 ## dependencies 
@@ -161,13 +164,23 @@ Example scenarios:
 - Single-page app with a form: Start (E,N,[Z]), End (E,N,[Z]), precision, Save/Use saved start controls.
 - Results panel renders human-readable output and optional JSON tab.
 - Invalid inputs highlighted with inline messages.
-- Runs at `http://127.0.0.1:8000/` by default.
+- Runs at `http://127.0.0.1:8000/` by default (configurable via POP_FLY_HOST/POP_FLY_PORT).
 
 ## validation and testing 
 - Unit tests (existing): core computations; CLI behaviors (persistence, formatting).
 - API tests: FastAPI TestClient for happy paths (XY, XY+Z), zero distance, rounding, invalid payloads (400).
 - Frontend tests (optional): light smoke tests for ΔZ sign formatting and form validation.
 - Manual smoke: Web UI save/use start, compute with/without Z, error display, refresh persistence.
+
+## automation (workflows & scripts)
+- Architecture guard (scripts/architecture_guard.py): CI-time invariant checks to prevent prohibited tech or contract drift; blocks merges on violation.
+- Docs generator (scripts/generate_docs.py): On merged PRs, proposes and applies small README/PRD edits through structured ops validated against `docs/schema/docs_ops.json`. Creates a docs PR; in dry-run writes previews to tmp/.
+- Issue planning (scripts/ai_plan_issue.py): On `/plan` issue comment, posts a concise plan; validates against `docs/schema/plan_schema.json` when not in dry-run.
+- Roadmap sync (scripts/roadmap_to_issues.py): Converts ROADMAP.md bullets to issues with section/status labels; idempotent; optional inclusion of unannotated bullets via env.
+- PR checklist (scripts/update_pr_checklist.py): Maintains a task checklist in PR body based on the linked issue’s latest plan and commit messages.
+- Scaffold from plan (scripts/scaffold_from_plan.py): Optional guarded code generation from `feature-plan.md` under profile constraints (allowed paths, budgets, forbidden imports/paths, optional required PR label).
+
+Env vars: OPENAI_API_KEY (LLM), PLAN_MODEL, GITHUB_TOKEN/REPOSITORY/EVENT_PATH, DRY_RUN, ROADMAP_INCLUDE_UNANNOTATED, AUTOMATION_PROFILE. Safety policies: dry-run modes, schema validation, per-file op caps, file/line budgets, allowed path enforcement, forbidden import checks, and PR label gating.
 
 ## acceptance criteria 
 - CLI: returns distance (m) and azimuth (mils); with both Z values, returns slant_distance_m and delta_z_m; JSON and human-readable outputs follow rules above; exit code 2 on usage errors; ΔZ sign explicit.
