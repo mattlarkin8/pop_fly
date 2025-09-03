@@ -214,8 +214,7 @@ def main() -> None:
                 continue
             if not any(str(target).startswith(str(ad)) for ad in allowed_dirs):
                 continue
-            # Enforce strict allowed files and no file creation outside them
-            # Enforce allowed files/dirs per profile
+            # Enforce that only files and directories allowed by the profile can be changed or created
             if allowed_files_set:
                 if target not in allowed_files_set:
                     continue
