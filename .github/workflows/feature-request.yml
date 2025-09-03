@@ -35,8 +35,17 @@ jobs:
           # Build a safe branch name with the required prefix 'feature/plan-'
           PREFIX="feature/plan"
           RAW_INPUT="${{ github.event.inputs.feature_request }}"
-          # Slugify the request: lowercase, replace non a-z0-9 with '-', trim, and limit length
-          SLUG="$(echo "$RAW_INPUT" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g' | sed -E 's/^-+|-+$//g' | cut -c 1-40)"
+          # Slugify the request in multiple steps for clarity and easier debugging
+          RAW_LOWER="$(echo "$RAW_INPUT" | tr '[:upper:]' '[:lower:]')"
+          RAW_SLUG="$(echo "$RAW_LOWER" | sed -E 's/[^a-z0-9]+/-/g')"
+          RAW_TRIMMED="$(echo "$RAW_SLUG" | sed -E 's/^-+|-+$//g')"
+          SLUG="$(echo "$RAW_TRIMMED" | cut -c 1-40)"
+          # Debug output for each step (optional, can be removed if too verbose)
+          echo "RAW_INPUT: $RAW_INPUT"
+          echo "RAW_LOWER: $RAW_LOWER"
+          echo "RAW_SLUG: $RAW_SLUG"
+          echo "RAW_TRIMMED: $RAW_TRIMMED"
+          echo "SLUG: $SLUG"
           # Fallback slug if empty after sanitization
           if [ -z "$SLUG" ]; then SLUG="plan"; fi
           BRANCH_NAME="${PREFIX}-${SLUG}"
