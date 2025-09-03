@@ -43,7 +43,7 @@ jobs:
 
           echo "Computed branch: $BRANCH_NAME"
           # Guardrail: ensure the computed branch matches the expected pattern
-          if ! echo "$BRANCH_NAME" | grep -Eq '^feature/plan-[a-z0-9-]+$'; then
+          if ! echo "$BRANCH_NAME" | grep -Eq '^feature/plan-[a-z0-9]+(-[a-z0-9]+)*$'; then
             echo "Branch name failed validation: $BRANCH_NAME" >&2
             exit 1
           fi
