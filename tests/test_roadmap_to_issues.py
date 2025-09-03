@@ -57,7 +57,8 @@ class TestRoadmapParser(unittest.TestCase):
         self.assertEqual(x.title, "Feature X")
         self.assertEqual(x.status, "In progress")
         self.assertEqual(y.title, "Feature Y")
-        self.assertEqual(y.status, "Planned")
+        # Unannotated items should have status == None (skipped by default when upserting)
+        self.assertIsNone(y.status)
         self.assertEqual(y.body, "details")
 
 

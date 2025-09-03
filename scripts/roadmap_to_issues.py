@@ -37,7 +37,8 @@ class RoadmapItem:
     section: str  # Now|Next|Later
     title: str
     body: str
-    status: str  # emoji or word
+    # status is None when the item has no explicit status marker (emoji or word).
+    status: Optional[str]
     issue_ref: Optional[int]
 
 
@@ -52,6 +53,13 @@ def parse_roadmap(md: str) -> List[RoadmapItem]:
         m_section = SECTION_RE.match(line)
         if m_section:
             section = m_section.group(1)
+            i += 1
+            continue
+        # If we encounter any other H2 ("## ...") that is not a roadmap section,
+        # clear the current section so subsequent top-level bullets are not
+        # incorrectly attributed to the previous Now/Next/Later section.
+        if line.startswith("## ") and not m_section:
+            section = None
             i += 1
             continue
 
@@ -89,15 +97,17 @@ def parse_roadmap(md: str) -> List[RoadmapItem]:
             if m_issue:
                 issue_ref = int(m_issue.group(1))
 
-            # Normalize status to one of Done / In progress / Planned
-            status_word = "Planned"
+            # Normalize status to one of Done / In progress / Planned, but only
+            # if an explicit status marker (emoji or known word) was present.
+            status_word: Optional[str] = None
             s_low = (status or "").lower()
-            if "🟢" in status or s_low == "done":
-                status_word = "Done"
-            elif "🟡" in status or s_low == "in progress":
-                status_word = "In progress"
-            elif "⚪" in status or s_low == "planned":
-                status_word = "Planned"
+            if status:
+                if "🟢" in status or s_low == "done":
+                    status_word = "Done"
+                elif "🟡" in status or s_low == "in progress":
+                    status_word = "In progress"
+                elif "⚪" in status or s_low == "planned":
+                    status_word = "Planned"
 
             items.append(RoadmapItem(section=section, title=title, body=body, status=status_word, issue_ref=issue_ref))
             i = j
@@ -166,8 +176,17 @@ def upsert_issues(items: Iterable[RoadmapItem]) -> None:
     by_number = {iss.number: iss for iss in existing_issues}
 
     for it in items:
+        # Skip items that do not have an explicit status marker unless the
+        # environment variable ROADMAP_INCLUDE_UNANNOTATED=true is set. This
+        # reduces accidental issue creation from unannotated bullets.
+        include_unannotated = os.environ.get("ROADMAP_INCLUDE_UNANNOTATED", "false").lower() in ("1", "true", "yes")
+        if it.status is None and not include_unannotated:
+            print(f"Skipping unannotated roadmap item: '{it.title}' (section={it.section})")
+            continue
+
         # Determine the desired status label for this item
-        status_label = it.status
+        # At this point, it.status is not None (we skipped None above)
+        status_label = it.status  # type: ignore
 
         target_issue = None
         if it.issue_ref and it.issue_ref in by_number:
