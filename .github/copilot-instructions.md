@@ -99,7 +99,7 @@ These rules align with our docs automation (see `scripts/generate_docs.py`) and 
     - append_to_section(heading, content)
     - upsert_section(heading, level, content)
     - replace_block_by_marker(name, content) using markers: `<!-- AUTO-DOC:NAME -->` ... `<!-- /AUTO-DOC:NAME -->`
-  - Operate only on uniquely named headings; if a heading isn’t unique, don’t guess—skip or upsert a new section instead.
+  - When multiple sections share the same heading, include an optional 1-based `occurrence` to disambiguate which instance to edit. If `occurrence` is omitted, automation will default to the first matching heading and emit a warning. Prefer specifying `occurrence` when ambiguity is likely.
 
 - Safety and style constraints
   - Keep changes minimal and localized; preserve heading text, hierarchy, and surrounding formatting.
@@ -108,8 +108,9 @@ These rules align with our docs automation (see `scripts/generate_docs.py`) and 
   - Maintain existing tone and style; keep relative links intact; don’t alter anchors unless necessary.
   - Preserve code fences and languages; for Windows examples, prefer PowerShell syntax and separate commands per line.
   - Avoid placeholders like “TBD”/“TODO”; prefer concrete, testable statements or omit.
+  - It’s acceptable to update existing sections even when headings are duplicated, provided edits stay scoped to the selected section. Use `occurrence` to target the right one.
 
 - Validation and parity with automation
-  - When producing machine-readable edits, conform to the JSON schema in `docs/schema/docs_ops.json` and the op types above.
+  - When producing machine-readable edits, conform to the JSON schema in `docs/schema/docs_ops.json` (which supports an optional `occurrence` field) and the op types above.
   - Prefer marker replacements for recurring, auto-managed blocks.
   - After edits, generate a small unified diff for review; summarize warnings (e.g., skipped ambiguous headings).

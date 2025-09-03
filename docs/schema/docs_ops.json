@@ -15,6 +15,7 @@
               "properties": {
                 "type": { "type": "string", "enum": ["replace_section","append_to_section","upsert_section","replace_block_by_marker"] },
                 "heading": { "type": "string" },
+                "occurrence": { "type": "integer", "minimum": 1 },
                 "name": { "type": "string" },
                 "level": { "type": "integer" },
                 "content": { "type": "string" }

@@ -51,6 +51,50 @@ class TestDocsApplier(unittest.TestCase):
         self.assertTrue(errors)
         self.assertIn("marker 'FRONTEND_BUILD' not found", "\n".join(errors))
 
+    def test_occurrence_disambiguation_replace(self):
+        md = (
+            "# Title\n\n"
+            "## Dup\n"
+            "First\n\n"
+            "## Dup\n"
+            "Second\n\n"
+            "## Tail\n"
+            "End\n"
+        )
+        ops = [
+            {"type": "replace_section", "heading": "Dup", "content": "Repl2", "occurrence": 2}
+        ]
+        new_text, warnings, errors = apply_ops_to_markdown(md, ops, "README.md")
+        self.assertFalse(errors)
+        # First occurrence unchanged
+        self.assertIn("## Dup\nFirst", new_text)
+        # Second occurrence replaced
+        self.assertIn("## Dup\nRepl2", new_text)
+        # No defaulting warning since occurrence was provided
+        self.assertTrue(all("defaulted to first occurrence" not in w for w in warnings))
+
+    def test_occurrence_default_first_with_warning(self):
+        md = (
+            "# Title\n\n"
+            "## Dup\n"
+            "First\n\n"
+            "## Dup\n"
+            "Second\n\n"
+            "## Tail\n"
+            "End\n"
+        )
+        ops = [
+            {"type": "replace_section", "heading": "Dup", "content": "Repl1"}
+        ]
+        new_text, warnings, errors = apply_ops_to_markdown(md, ops, "PRD.md")
+        self.assertFalse(errors)
+        # First occurrence replaced
+        self.assertIn("## Dup\nRepl1", new_text)
+        # Second occurrence unchanged
+        self.assertIn("## Dup\nSecond", new_text)
+        # Warning emitted about defaulting
+        self.assertTrue(any("defaulted to first occurrence" in w for w in warnings))
+
 
 if __name__ == "__main__":
     unittest.main()
