@@ -92,7 +92,7 @@ def main() -> None:
             existing_prs = repo.get_pulls(state='open', head=f'{repo.owner.login}:{branch_name}')
         except Exception:
             existing_prs = []
-        if not existing_prs or (hasattr(existing_prs, 'totalCount') and getattr(existing_prs, 'totalCount', 0) == 0):
+        if not existing_prs or existing_prs.totalCount == 0:
             print(
                 f"Profile '{profile_name}' requires an open PR labeled '{required_label}' for branch '{branch_name}'."
                 " Create a PR for the branch and add the label before running the scaffolder."
