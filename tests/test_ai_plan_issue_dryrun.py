@@ -34,10 +34,10 @@ class TestAIPlanIssueDryRun(unittest.TestCase):
             shutil.rmtree(self.tmp_dir)
 
     def test_writes_default_issue_file_when_no_issue_env(self):
-        """When no ISSUE_NUMBER or event is provided, dry-run should still write issue-0-plan.txt"""
+        """When no ISSUE_NUMBER or event is provided, dry-run should write issue-unknown-plan.txt"""
         res = _run_dry_run_env()
         self.assertEqual(res.returncode, 0, msg=f"Stdout: {res.stdout}\nStderr: {res.stderr}")
-        out_file = os.path.join(self.tmp_dir, "issue-0-plan.txt")
+        out_file = os.path.join(self.tmp_dir, "issue-unknown-plan.txt")
         self.assertTrue(os.path.exists(out_file), msg=res.stdout + res.stderr)
         with open(out_file, "r", encoding="utf-8") as f:
             content = f.read()
