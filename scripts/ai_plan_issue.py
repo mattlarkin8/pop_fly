@@ -229,7 +229,8 @@ def main() -> None:
     else:
         out_dir = os.path.join(os.getcwd(), "tmp", "ai-plan-dryrun")
         os.makedirs(out_dir, exist_ok=True)
-        out_file = os.path.join(out_dir, f"issue-{issue_number}-plan.txt")
+        file_issue_part = f"{issue_number}" if issue_number != 0 else "unknown"
+        out_file = os.path.join(out_dir, f"issue-{file_issue_part}-plan.txt")
         with open(out_file, "w", encoding="utf-8") as f:
             f.write(comment)
         print(f"DRY-RUN: wrote plan to {out_file}")
