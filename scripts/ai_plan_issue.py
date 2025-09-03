@@ -79,7 +79,7 @@ def ensure_pygithub() -> None:
 
     Github = _Github
 
-def _parse_event_issue(event_path: str) -> Optional[int]:
+def _parse_event_issue(event_path: Optional[str]) -> Optional[int]:
     if not event_path or not os.path.exists(event_path):
         return None
     with open(event_path, "r", encoding="utf-8") as f:
@@ -89,34 +89,9 @@ def _parse_event_issue(event_path: str) -> Optional[int]:
     return None
 
 
-def validate_plan_schema(plan_text: str) -> Tuple[bool, Optional[str]]:
-    """Validate LLM-produced plan text against docs/schema/plan_schema.json if present.
-
-    If schema is missing, returns (True, None). If schema exists, expects the plan to be valid JSON matching schema.
-    """
-    schema_path = os.path.join(os.getcwd(), "docs", "schema", "plan_schema.json")
-    if not os.path.exists(schema_path):
-        return True, None
-    try:
-        from jsonschema import validate, ValidationError  # type: ignore
-    except Exception:
-        return True, "jsonschema not installed; skipping schema validation"
-
-    try:
-        payload = json.loads(plan_text)
-    except json.JSONDecodeError:
-        return False, "Model output is not valid JSON but schema exists at docs/schema/plan_schema.json"
-
-    with open(schema_path, "r", encoding="utf-8") as f:
-        schema = json.load(f)
-    try:
-        validate(instance=payload, schema=schema)
-    except ValidationError as e:
-        return False, str(e)
-    return True, None
 
 
-def get_issue_context(dry_run: bool = False) -> tuple[Optional[int], Optional[str], Optional[str]]:
+def get_issue_context(dry_run: bool = False) -> tuple[int, Optional[str], Optional[str]]:
 
     """Return (issue_number, owner, repo_name).
 
@@ -147,7 +122,7 @@ def get_issue_context(dry_run: bool = False) -> tuple[Optional[int], Optional[st
     elif not dry_run:
         raise SystemExit("GITHUB_REPOSITORY missing")
 
-    # For dry-run, return permissive defaults (issue_number may be None)
+    # For dry-run, return permissive defaults (issue_number will be 0 if missing)
     return issue_number or 0, owner, repo_name
 
 
