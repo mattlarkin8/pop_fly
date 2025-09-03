@@ -15,12 +15,22 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           LABEL_NAME="docs"
-          EXIST=$(gh api repos/${{ github.repository }}/labels/$LABEL_NAME -H "Accept: application/vnd.github+json" --silent 2>/dev/null || true)
-          if [ -z "$EXIST" ]; then
-            echo "Creating label $LABEL_NAME"
-            gh api --method POST repos/${{ github.repository }}/labels -F name=$LABEL_NAME -F color=0e8a16 -F description='Documentation changes'
+          # Prefer using gh to list labels; if not available, fall back to the REST API check
+          if command -v gh >/dev/null 2>&1; then
+            if gh label list -R ${{ github.repository }} | grep -qE "^$LABEL_NAME\b"; then
+              echo "Label $LABEL_NAME already exists (via gh)"
+            else
+              echo "Creating label $LABEL_NAME (via gh)"
+              gh label create $LABEL_NAME --color "0075ca" --description "Documentation related"
+            fi
           else
-            echo "Label $LABEL_NAME already exists"
+            EXIST=$(gh api repos/${{ github.repository }}/labels/$LABEL_NAME -H "Accept: application/vnd.github+json" --silent 2>/dev/null || true)
+            if [ -z "$EXIST" ]; then
+              echo "Creating label $LABEL_NAME (via API)"
+              gh api --method POST repos/${{ github.repository }}/labels -F name=$LABEL_NAME -F color=0e8a16 -F description='Documentation changes'
+            else
+              echo "Label $LABEL_NAME already exists (via API)"
+            fi
           fi
 
       - name: Checkout
