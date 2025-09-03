@@ -84,13 +84,14 @@ Local dev setup (recommended):
 - Single-responsibility: post at most one trigger comment per issue unless explicitly asked to retry; wait for the workflow result and show the maintainer the generated plan before re-triggering.
 - When a skip occurs, post a single informative comment (once) explaining why the trigger was skipped and what the user can do to force a rerun (for example, add a comment `force:/plan` or re-run the workflow).
 
-## Documentation editing rules (README.md, PRD.md)
+## Documentation editing rules (Markdown docs)
 
 These rules align with our docs automation (see `scripts/generate_docs.py`) and should be followed for any manual or automated edits to Markdown docs.
 
 - Scope and targets
-  - Default targets are `README.md` and `PRD.md`. Avoid editing other docs unless explicitly requested.
-  - Prefer editing only specific sections or explicit marker blocks; do not rewrite entire files.
+  - Default targets are Markdown docs. E.g. `README.md`, `PRD.md`, `**/*.md`.
+  - Prefer section-level or marker-based edits; avoid rewriting entire documents.
+  - Avoid editing non-doc files or Markdown outside this scope unless explicitly requested or clearly part of the PR’s doc changes.
 
 - Allowed operations (structured)
   - Use heading/marker-based ops that mirror automation capabilities:

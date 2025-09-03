@@ -465,6 +465,12 @@ def main() -> None:
             body = "\n".join(body_lines)
             try:
                 new_pr = repo.create_pull(title=title, body=body, head=branch, base=repo.default_branch)
+                # Ensure the created docs PR is labeled so other workflows recognize it as docs-related
+                try:
+                    new_pr.add_to_labels("docs")
+                except Exception as _e:
+                    # Non-fatal: label may not exist or API call may fail due to permissions
+                    print(f"Warning: could not add 'docs' label to PR #{new_pr.number}: {_e}")
                 pr_obj.create_issue_comment(f"Automated docs PR created: #{new_pr.number}")
                 print(f"Created docs PR: {new_pr.html_url}")
             except Exception as e:

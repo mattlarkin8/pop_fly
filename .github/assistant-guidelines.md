@@ -120,8 +120,8 @@ How I will reference this
 Documentation editing rules (Markdown)
 
 - Scope
-    - Default docs to edit are `README.md` and `PRD.md` unless otherwise requested.
-    - Prefer targeted, section-level changes; do not rewrite entire documents.
+    - Default targets are Markdown docs. E.g. `README.md`, `PRD.md`, `**/*.md`. Align with `.github/labeler.yml` patterns for what constitutes documentation.
+    - Prefer targeted, section-level or marker-based changes; avoid rewriting entire documents.
 
 - Allowed operations (mirror automation in `scripts/generate_docs.py`)
   - replace_section(heading, content)
