@@ -1,0 +1,6 @@
+# path to label mapping for automated labeler
+docs:
+  - "PRD.md"
+  - "README.md"
+  - "docs/**"
+  - "*.md"

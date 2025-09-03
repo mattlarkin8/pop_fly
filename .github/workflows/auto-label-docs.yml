@@ -1,0 +1,32 @@
+name: Auto-label docs PRs
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  ensure-label-and-run:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Ensure 'docs' label exists
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LABEL_NAME="docs"
+          EXIST=$(gh api repos/${{ github.repository }}/labels/$LABEL_NAME -H "Accept: application/vnd.github+json" --silent 2>/dev/null || true)
+          if [ -z "$EXIST" ]; then
+            echo "Creating label $LABEL_NAME"
+            gh api --method POST repos/${{ github.repository }}/labels -F name=$LABEL_NAME -F color=0e8a16 -F description='Documentation changes'
+          else
+            echo "Label $LABEL_NAME already exists"
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply labels based on path
+        uses: actions/labeler@v4
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}

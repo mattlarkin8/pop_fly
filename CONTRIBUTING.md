@@ -1,6 +1,6 @@
 # Contributing — automation & docs generation
 
-This repository includes automated helpers that call LLMs to generate implementation plans and documentation updates. Safety-first defaults are enforced: automation runs in dry-run mode by default, outputs are validated when possible, and CI only produces artifacts for review.
+This repository includes automated helpers that call LLMs to generate implementation plans and documentation updates. Safety-first defaults are enforced: outputs are validated, edits are constrained to docs, and CI now runs automatic documentation generation on PR pushes (with an opt-out label). A dry-run workflow remains available for artifact-only previews.
 
 Quick start
 - Create and activate a virtualenv in the repo root:
@@ -19,6 +19,8 @@ Quick start
 
 Automation scripts (safety rules)
 - `scripts/generate_docs.py`
+  - Creates a documentation PR with safe, minimal edits to Markdown docs (README.md, PRD.md, and files under `docs/**`).
+  - Automatically attempts to add the `docs` label to the PR it creates (non-fatal if label missing).
   - Supports `--dry-run` (or set `DRY_RUN=1`) — dry-run writes unified diffs to `tmp/docs-dryrun/` and does not push, create branches, or open PRs.
   - Validates model output against `docs/schema/docs_ops.json` if present and `jsonschema` is installed.
 
@@ -42,17 +44,20 @@ Schema and validation
 
 CI behavior
 - CI installs `requirements-dev.txt` and runs unit tests.
-- A dedicated workflow runs `generate_docs.py --dry-run` on merges to `main` and uploads `tmp/docs-dryrun/` as an artifact for human review. The repository does not auto-apply docs edits by default.
+- Auto-labeler: a workflow uses `.github/labeler.yml` to apply the `docs` label to PRs that touch documentation files (README.md, PRD.md, `docs/**`, and other `*.md`).
+- Auto-docs generation: a workflow runs on PR open/synchronize/reopen and executes `scripts/generate_docs.py` to propose and open a separate documentation PR. This job is label-gated to skip when the source PR already has any label containing `docs` (e.g., `docs`, `docs:auto`).
+- Dry-run preview: a separate workflow still runs `generate_docs.py --dry-run` and uploads `tmp/docs-dryrun/` artifacts for review when needed.
 
 Security & secrets
 - Keep `OPENAI_API_KEY` and other secrets in repository secrets only. Do not print or commit secrets.
+- The auto-docs workflow requires `OPENAI_API_KEY` (and uses `GITHUB_TOKEN`) to create branches and PRs.
 - CI exposes model keys only to protected branches and trusted workflows. DO NOT run LLM calls on untrusted forked PRs.
 
-When to enable auto-apply
-- Auto-apply (create PRs automatically) increases risk. To propose enabling it:
-  1. Open an issue describing the proposed automation scope and safety checks (schemas, diff-size caps, allowed paths).
-  2. Provide a runbook showing how to disable the automation and how to audit recent automated PRs.
- 3. Get at least one approval from a project maintainer before adding any secrets or workflow changes to enable auto-apply.
+Controlling auto-apply (opt-out/opt-in)
+- Default: documentation is generated automatically on PR pushes unless the PR carries a `docs`-related label.
+- To opt-out for a PR (skip auto-docs), add the `docs` label (or any label containing `docs`).
+- To force only a preview, run the dry-run workflow and review artifacts under `tmp/docs-dryrun/`.
+- To adjust coverage, edit `.github/labeler.yml` (which defines what changes are considered documentation) and the docs editing rules in `.github/copilot-instructions.md` and `.github/assistant-guidelines.md`.
 
 Tests and contribution checklist
 - Run unit tests and linters before opening a PR.
