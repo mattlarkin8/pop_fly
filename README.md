@@ -84,6 +84,8 @@ Common env vars for automation
 - `PLAN_MODEL`: model override for scripts (defaults set inside scripts; e.g., `gpt-4o-mini`).
 - `DRY_RUN=1`: where supported, prevents writes and saves artifacts under `tmp/`.
 
+- The `generate-docs` workflow now includes a required manual input `pr_number` for better tracking of documentation changes.
+
 ### Notes
 
 - The automation scripts are deliberately conservative: schema validation, per-file op caps, file/line budgets, allowed-path enforcement, forbidden-import checks, and dry-run modes are used to avoid accidental large-scale changes.
