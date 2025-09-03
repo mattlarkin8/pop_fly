@@ -4,6 +4,13 @@ on:
   pull_request:
     # Run when a PR is merged to main. We want to generate docs updates for the accepted changes.
     types: [closed]
+  # Allow manual runs from the Actions UI (requires a PR number for manual runs)
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to generate docs for (required for manual runs)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -12,8 +19,12 @@ permissions:
 jobs:
   gen-docs:
     # Run only for merged PRs and skip PRs already labeled with 'docs' to avoid automation loops.
-    if: ${{ github.event.pull_request.merged == true && !contains(join(github.event.pull_request.labels.*.name, ','), 'docs') }}
+    # Also allow manual runs via workflow_dispatch.
+    if: ${{ (github.event_name == 'pull_request' && github.event.pull_request.merged == true && !contains(join(github.event.pull_request.labels.*.name, ','), 'docs')) || (github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
+    env:
+      # Use the manual input when dispatched by workflow_dispatch, otherwise use the PR number from the pull_request event
+      PR_NUMBER: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.pr_number || github.event.pull_request.number }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
