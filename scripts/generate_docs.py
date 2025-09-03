@@ -466,7 +466,14 @@ def main() -> None:
             git(["git", "add", "-A"])
 
             # Skip commit if there are no staged changes
-            staged_check = subprocess.run(["git", "diff", "--cached", "--quiet"])  # 0 means no changes
+            try:
+                staged_check = subprocess.run(["git", "diff", "--cached", "--quiet"])
+            except FileNotFoundError:
+                print("Error: 'git' command not found. Ensure git is installed and available in PATH.")
+                return
+            except Exception as e:
+                print(f"Error running 'git diff --cached --quiet': {e}")
+                return
             if staged_check.returncode == 0:
                 print("No documentation changes to commit; skipping commit/PR creation.")
                 if pr_obj is not None:
