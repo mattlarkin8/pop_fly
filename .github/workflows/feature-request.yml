@@ -31,16 +31,29 @@ jobs:
 
       - name: Create new branch and commit plan
         run: |
-          # Sanitize the feature request to create a valid branch name
-          BRANCH_NAME_RAW="feature/plan-${{ github.event.inputs.feature_request }}"
-          BRANCH_NAME=$(echo "$BRANCH_NAME_RAW" | tr -s '[:space:]' '-' | tr -s '[:punct:]' '-' | tr '[:upper:]' '[:lower:]' | sed 's/--/-/g' | sed 's/^-//' | sed 's/-$//' | cut -c 1-60)
-          
+          set -euo pipefail
+          # Build a safe branch name with the required prefix 'feature/plan-'
+          PREFIX="feature/plan"
+          RAW_INPUT="${{ github.event.inputs.feature_request }}"
+          # Slugify the request: lowercase, replace non a-z0-9 with '-', trim, and limit length
+          SLUG="$(echo "$RAW_INPUT" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g' | sed -E 's/^-+|-+$//g' | cut -c 1-40)"
+          # Fallback slug if empty after sanitization
+          if [ -z "$SLUG" ]; then SLUG="plan"; fi
+          BRANCH_NAME="${PREFIX}-${SLUG}"
+
+          echo "Computed branch: $BRANCH_NAME"
+          # Guardrail: ensure the computed branch matches the expected pattern
+          if ! echo "$BRANCH_NAME" | grep -Eq '^feature/plan-[a-z0-9-]+$'; then
+            echo "Branch name failed validation: $BRANCH_NAME" >&2
+            exit 1
+          fi
+
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           
-          git checkout -b $BRANCH_NAME
+          git checkout -b "$BRANCH_NAME"
           git add feature-plan.md
           git commit -m "feat: add AI-generated plan for '${{ github.event.inputs.feature_request }}'"
-          git push origin $BRANCH_NAME
+          git push origin "$BRANCH_NAME"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
