@@ -37,7 +37,38 @@ SYSTEM_PROMPT = (
 )
 
 
+def validate_plan_schema(plan_text: str) -> Tuple[bool, Optional[str]]:
+    """Validate LLM-produced plan text against docs/schema/plan_schema.json if present.
+
+    If schema is missing, returns (True, None). If schema exists, expects the plan to be valid JSON matching schema.
+    """
+    schema_path = os.path.join(os.getcwd(), "docs", "schema", "plan_schema.json")
+    if not os.path.exists(schema_path):
+        return True, None
+    try:
+        from jsonschema import validate, ValidationError  # type: ignore
+    except Exception:
+        return True, "jsonschema not installed; skipping schema validation"
+
+    try:
+        payload = json.loads(plan_text)
+    except json.JSONDecodeError:
+        return False, "Model output is not valid JSON but schema exists at docs/schema/plan_schema.json"
+
+    with open(schema_path, "r", encoding="utf-8") as f:
+        schema = json.load(f)
+    try:
+        validate(instance=payload, schema=schema)
+    except ValidationError as e:
+        return False, str(e)
+    return True, None
+
+
 def ensure_pygithub() -> None:
+    """Install and import PyGithub only when we need to post to GitHub.
+
+    This should not be called in dry-run mode so we avoid side effects.
+    """
     global Github
     if Github is not None:
         return
@@ -47,7 +78,6 @@ def ensure_pygithub() -> None:
     from github import Github as _Github  # type: ignore
 
     Github = _Github
-
 
 def _parse_event_issue(event_path: str) -> Optional[int]:
     if not event_path or not os.path.exists(event_path):
@@ -87,6 +117,7 @@ def validate_plan_schema(plan_text: str) -> Tuple[bool, Optional[str]]:
 
 
 def get_issue_context(dry_run: bool = False) -> tuple[Optional[int], Optional[str], Optional[str]]:
+
     """Return (issue_number, owner, repo_name).
 
     In non-dry-run mode we require GITHUB_REPOSITORY and an issue number. In
@@ -229,8 +260,10 @@ def main() -> None:
     else:
         out_dir = os.path.join(os.getcwd(), "tmp", "ai-plan-dryrun")
         os.makedirs(out_dir, exist_ok=True)
+        
         file_issue_part = f"{issue_number}" if issue_number != 0 else "unknown"
         out_file = os.path.join(out_dir, f"issue-{file_issue_part}-plan.txt")
+
         with open(out_file, "w", encoding="utf-8") as f:
             f.write(comment)
         print(f"DRY-RUN: wrote plan to {out_file}")
