@@ -13,7 +13,7 @@ import sys
 from typing import Any, Dict
 
 
-MODEL = os.environ.get("PLAN_MODEL", "gpt-4-turbo-preview")
+MODEL = os.environ.get("PLAN_MODEL", "gpt-4o-mini")
 
 SYSTEM_PROMPT = """
 You are an expert software architect. Your task is to create a detailed, step-by-step plan to implement a new feature based on a high-level request.

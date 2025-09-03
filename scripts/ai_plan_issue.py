@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Create a task breakdown plan for a GitHub Issue using an LLM and post it as a comment.
+Create a task breakdown plan for a GitHub Issue using an LLM (OpenAI) and post it as a comment.
 
 Usage in Actions:
 - Triggered when someone comments "/plan" on an issue (or via workflow_dispatch).
-- Requires one of OPENAI_API_KEY or ANTHROPIC_API_KEY; otherwise no-ops gracefully.
+- Requires OPENAI_API_KEY; otherwise no-ops gracefully.
 
 Security notes:
 - Reads issue via GITHUB_TOKEN. Does not write code, only comments a suggested plan.
@@ -26,7 +26,7 @@ except Exception:
     Github = None
 
 
-MODEL = os.environ.get("PLAN_MODEL", "gpt-5-mini")
+MODEL = os.environ.get("PLAN_MODEL", "gpt-4o-mini")
 
 SYSTEM_PROMPT = (
     "You are an expert software project planner. Given a GitHub issue, produce a short, actionable plan: "
@@ -127,13 +127,12 @@ def get_issue_context(dry_run: bool = False) -> tuple[int, Optional[str], Option
 
 
 def call_llm(prompt: str) -> str:
-    # Try OpenAI first
+    # OpenAI only
     openai_key = os.environ.get("OPENAI_API_KEY")
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not openai_key and not anthropic_key:
+    if not openai_key:
         return (
             "No LLM key configured. Skipping plan generation.\n"
-            "Set OPENAI_API_KEY or ANTHROPIC_API_KEY secrets to enable."
+            "Set OPENAI_API_KEY secret to enable."
         )
 
     try:
@@ -143,41 +142,21 @@ def call_llm(prompt: str) -> str:
         subprocess.check_call([sys.executable, "-m", "pip", "install", "requests>=2.31.0"])  # noqa: S603,S607
         import requests  # type: ignore  # noqa: E402
 
-    if openai_key:
-        url = "https://api.openai.com/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {openai_key}", "Content-Type": "application/json"}
-        data: Dict[str, Any] = {
-            "model": MODEL,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.2,
-        }
-        r = requests.post(url, headers=headers, json=data, timeout=60)
-        r.raise_for_status()
-        j = r.json()
-        content = j["choices"][0]["message"]["content"].strip()
-        return content
-
-    # Fallback to Anthropic
-    url = "https://api.anthropic.com/v1/messages"
-    headers = {
-        "x-api-key": anthropic_key,
-        "content-type": "application/json",
-        "anthropic-version": "2023-06-01",
-    }
-    data = {
-        "model": os.environ.get("PLAN_ANTHROPIC_MODEL", "claude-3-5-sonnet-20240620"),
-        "max_tokens": 1200,
-        "system": SYSTEM_PROMPT,
-        "messages": [{"role": "user", "content": prompt}],
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {openai_key}", "Content-Type": "application/json"}
+    data: Dict[str, Any] = {
+        "model": MODEL,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.2,
     }
     r = requests.post(url, headers=headers, json=data, timeout=60)
     r.raise_for_status()
     j = r.json()
-    content = "".join(part.get("text", "") for part in j["content"])  # type: ignore
-    return content.strip()
+    content = j["choices"][0]["message"]["content"].strip()
+    return content
 
 
 def main() -> None:
@@ -219,13 +198,14 @@ def main() -> None:
 
     plan = call_llm(prompt)
 
-    # Optional schema validation
-    valid_schema, schema_msg = validate_plan_schema(plan)
-    if not valid_schema:
-        print(f"Plan does not conform to schema: {schema_msg}")
-        if not dry_run and issue is not None:
-            issue.create_comment(f"Automated plan generation failed schema validation: {schema_msg}")
-        return
+    # Optional schema validation: enforce only in non-dry-run mode
+    if not dry_run:
+        valid_schema, schema_msg = validate_plan_schema(plan)
+        if not valid_schema:
+            print(f"Plan does not conform to schema: {schema_msg}")
+            if issue is not None:
+                issue.create_comment(f"Automated plan generation failed schema validation: {schema_msg}")
+            return
 
     timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
     comment = f"Automated plan ({timestamp}):\n\n{plan}"

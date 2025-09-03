@@ -89,7 +89,7 @@ def main() -> None:
         return "\n".join(lines)
 
     def call_llm_for_changes(plan_md: str, structure: str) -> dict:
-        model = os.environ.get("PLAN_MODEL", "gpt-4-turbo-preview")
+        model = os.environ.get("PLAN_MODEL", "gpt-4o")
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key:
             return {"changes": [], "note": "OPENAI_API_KEY not set; skipped generation."}

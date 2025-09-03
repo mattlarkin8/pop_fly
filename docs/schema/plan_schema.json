@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AI Issue Plan",
+  "type": "object",
+  "description": "Structured plan for implementing an issue. This schema is optional and only enforced in non-dry-run modes.",
+  "properties": {
+    "title": { "type": "string", "description": "Optional short plan title or summary" },
+    "tasks": {
+      "type": "array",
+      "description": "Ordered list of actionable steps",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1,
+      "maxItems": 20
+    },
+    "tests": {
+      "type": "array",
+      "description": "Suggestions for unit/integration tests",
+      "items": { "type": "string" }
+    },
+    "risks": {
+      "type": "array",
+      "description": "Potential risks or considerations",
+      "items": { "type": "string" }
+    },
+    "notes": {
+      "type": "string",
+      "description": "Freeform notes"
+    }
+  },
+  "required": ["tasks"],
+  "additionalProperties": true
+}
