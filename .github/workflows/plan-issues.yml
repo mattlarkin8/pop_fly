@@ -21,11 +21,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       - name: Generate plan from issue
         env:
           GITHUB_TOKEN: ${{ secrets.POP_FLY_PAT }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           python -u scripts/ai_plan_issue.py

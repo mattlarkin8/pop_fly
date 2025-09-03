@@ -30,8 +30,10 @@ jobs:
       - name: Prepare branch and PR template
         env:
           GITHUB_TOKEN: ${{ secrets.POP_FLY_PAT }}
+          BRANCH_NAME: ${{ github.event_name == 'workflow_dispatch' && format('feature/plan-{0}', github.event.inputs.issue || 'manual') || github.ref_name }}
         run: |
-          python -u scripts/scaffold_from_plan.py
+          echo "Using branch: $BRANCH_NAME"
+          python -u scripts/scaffold_from_plan.py --branch "$BRANCH_NAME"
 
       - name: Safety note
         run: |

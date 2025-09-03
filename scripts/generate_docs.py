@@ -90,7 +90,7 @@ def call_llm_for_docs(
     )
 
     payload = {
-        "model": os.environ.get("PLAN_MODEL", "gpt-4-turbo-preview"),
+    "model": os.environ.get("PLAN_MODEL", "gpt-4o-mini"),
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
@@ -396,7 +396,8 @@ def main() -> None:
 
     if not per_file_ops:
         print("No applicable doc ops found.")
-        pr_obj.create_issue_comment("Docs automation found no applicable operations to apply.")
+        if not dry_run and pr_obj is not None:
+            pr_obj.create_issue_comment("Docs automation found no applicable operations to apply.")
         return
 
     file_results: Dict[str, Tuple[str, List[str], List[str], str]] = {}
