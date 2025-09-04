@@ -7,7 +7,7 @@ Date: 2025-09-01
 See also: [ROADMAP.md](./ROADMAP.md) for planned features and upcoming milestones.
 
 ## summary
-A Python-based calculator for distance and direction between two points using MGRS numeric inputs (eastings/northings digits only), now with a local web UI and an HTTP API. Scope remains intentionally narrow: input is MGRS digits only for E/N (with optional elevation Z in meters); computation is planar Euclidean; output distance is meters; direction is NATO mils (6400 mils per circle). When both start and end elevations are provided, the tool also reports slant distance and delta Z. The tool assumes grid north equals true north for azimuth reporting. To keep operation simple and because our maximum computed distance is ≤4,000 m, MGRS zone and 100k grid square letters are intentionally ignored; both points are assumed to be within the same implicit 100k square.
+A Python-based calculator for distance and direction between two points using MGRS numeric inputs (eastings/northings digits only), now with a local web UI and an HTTP API. Scope remains intentionally narrow: input is MGRS digits only for E/N; computation is planar Euclidean; output distance is meters; direction is NATO mils (6400 mils per circle). Elevation is not supported as of v2.0.0. The tool assumes grid north equals true north for azimuth reporting. To keep operation simple and because our maximum computed distance is ≤4,000 m, MGRS zone and 100k grid square letters are intentionally ignored; both points are assumed to be within the same implicit 100k square.
 
 Components: 
 - Library: pure Python core function for calculations.
@@ -30,11 +30,10 @@ Components:
 
 Example scenarios:
 - Given two points using MGRS digits (same implicit 100k grid), compute distance and azimuth (mils).
-- Given two MGRS-digit points with elevations, compute horizontal distance, azimuth (mils), slant distance, and delta Z.
 
 ## scope 
-- Input format: MGRS digits only for eastings and northings (excluding MGRS zone and 100k letters); +x is east, +y is north; optional Z (meters) for elevation. Easting and northing components are 1–5 digits each and are expanded to meters by padding to 5 digits (e.g., 037 → 3700 m, 051 → 5100 m). Zone and 100k letters are intentionally ignored given the ≤4 km max range and assumption that both points share the same 100k grid square.
-- Output: distance in meters; azimuth in NATO mils (grid). If Z present for both points, also output slant distance (m) and delta Z (m).
+- Input format: MGRS digits only for eastings and northings (excluding MGRS zone and 100k letters); +x is east, +y is north. Easting and northing components are 1–5 digits each and are expanded to meters by padding to 5 digits (e.g., 037 → 3700 m, 051 → 5100 m). Zone and 100k letters are intentionally ignored given the ≤4 km max range and assumption that both points share the same 100k grid square.
+- Output: distance in meters; azimuth in NATO mils (grid).
 - Interfaces: CLI, importable Python function, local HTTP API, and a Web UI served by the backend.
 - Accuracy target: ≤2 m error for distances ≤4 km under typical conditions.
 
@@ -46,41 +45,34 @@ Example scenarios:
 
 2. computation (shared by all interfaces)
   - Horizontal distance: `dx = E2 - E1; dy = N2 - N1; distance_m = sqrt(dx^2 + dy^2)`.
-  - Elevation delta (if Z1 and Z2 provided): `delta_z_m = Z2 - Z1`.
-  - Slant distance (if Z1 and Z2 provided): `slant_distance_m = sqrt(distance_m^2 + delta_z_m^2)`.
   - Bearing (deg): `(atan2(dx, dy) * 180/pi + 360) % 360` (north-referenced; grid assumed ≡ true).
   - Direction output (mils): `azimuth_mils = deg * 6400 / 360`.
 
 3. output (all interfaces) 
-  - Human-readable (no elevation): `Distance: 1234 m | Azimuth: 2190 mils`.
-  - Human-readable (with elevation): `Distance: 1234 m | Azimuth: 2190 mils | Slant: 1250 m | ΔZ: +80 m`.
-  - ΔZ presentation: always include an explicit sign prefix (+/-) in human-readable output.
-  - JSON (no elevation): `{ "format": "mgrs-digits", "start": [E1, N1], "end": [E2, N2], "distance_m": 1234.0, "azimuth_mils": 2190.0 }`.
-  - JSON (with elevation): `{ "format": "mgrs-digits", "start": [E1, N1, Z1], "end": [E2, N2, Z2], "distance_m": 1234.0, "slant_distance_m": 1250.0, "delta_z_m": 80.0, "azimuth_mils": 2190.0 }`.
-  - Rounding rules: distances (including slant and ΔZ) rounded to `precision` (default 0); azimuth rounded to 0.1 mil.
+  - Human-readable: `Distance: 1234 m | Azimuth: 2190 mils`.
+  - JSON: `{ "format": "mgrs-digits", "start": [E1, N1], "end": [E2, N2], "distance_m": 1234.0, "azimuth_mils": 2190.0 }`.
+  - Rounding rules: distances rounded to `precision` (default 0); azimuth rounded to 0.1 mil.
 
 4. cli interface (existing)
   - Command: `pop_fly` (or module entry if not installed).
   - Flags:
-  - `--start "EEE,NNN" --end "EEE,NNN"` OR `--start "EEE,NNN,Z" --end "EEE,NNN,Z"` (E/N are 1–5 MGRS digits; Z in meters)
+  - `--start "EEE,NNN" --end "EEE,NNN"` (E/N are 1–5 MGRS digits)
   - `--set-start "EEE,NNN"` (optional; saves a persistent default start point)
     - `--clear-start` (optional; removes any saved default start)
     - `--show-start` (optional; prints the saved default start, if any)
     - `--json` (optional)
     - `--precision <int>` (default: meters 0, mils 1)
   - Examples:
-  - `pop_fly --set-start "037,050,50"` (save start once, with elevation)
-  - `pop_fly --end "051,070,130"` (uses saved start; computes slant and ΔZ)
-  - `pop_fly --start "037,050" --end "051,070"` (horizontal only)
-  - `pop_fly --start "037,050,50" --end "051,070,130"` (horizontal + slant)
+  - `pop_fly --set-start "037,050"` (save start once)
+  - `pop_fly --start "037,050" --end "051,070"`
 
 5. http api (new) 
   - Framework: FastAPI; bind local-only (defaults to 127.0.0.1:8000; override with POP_FLY_HOST / POP_FLY_PORT).
   - Endpoints:
-    - `POST /api/compute` → request `{ start: [..], end: [..], precision?: int }` → response JSON as described above with rounding.
+  - `POST /api/compute` → request `{ start: [E, N], end: [E, N], precision?: int }` → response JSON as described above with rounding.
     - `GET /api/health` → `{ "status": "ok" }`.
     - `GET /api/version` → `{ "version": "x.y.z" }`.
-  - Validation: start and end must be arrays of length 2 or 3; E/N entries must be numeric strings (recommended, to preserve leading zeros) or numbers representing 1–5 digits prior to expansion; values must be finite.
+  - Validation: start and end must be arrays of length exactly 2; E/N entries must be numeric strings (recommended, to preserve leading zeros) or numbers representing 1–5 digits prior to expansion; values must be finite.
     - Shape/type errors are rejected by Pydantic with HTTP 422.
     - Business-rule errors (e.g., non-digit E/N tokens, out-of-range lengths) are returned as HTTP 400 with a message.
   - Static hosting: production build of the frontend served at `/` and assets at `/assets/*` by FastAPI.
@@ -88,22 +80,18 @@ Example scenarios:
 6. web ui (new) 
   - Stack: React + TypeScript + Vite + React-Bootstrap (Bootstrap 5 CSS).
   - Functionality:
-    - Inputs for Start (E,N,[Z]) and End (E,N,[Z]).
+    - Inputs for Start (E,N) and End (E,N).
     - Precision selector.
     - Save Start to browser localStorage and toggle "Use saved start".
     - Compute calls `POST /api/compute`; display human-readable line and optional raw JSON view.
   - Validation: numeric-only, finite; clear inline error messages.
-  - ΔZ formatting: explicit `+/-` sign when both Z values are present.
   - Dev flow: Vite dev server proxies `/api/*` to FastAPI; prod build is served by FastAPI.
 
 7. library api (existing) 
-  - Function: `compute_distance_bearing_xy(start: tuple[float, float] | tuple[float, float, float], end: tuple[float, float] | tuple[float, float, float]) -> Result`
-  - Result dataclass:
-    - `distance_m: float` (horizontal)
-    - `slant_distance_m: float | None`
-    - `delta_z_m: float | None`
-    - `azimuth_mils: float`
-    - `normalized_inputs: dict` (echoed XY(Z) values)
+  - Function: `compute_distance_bearing_xy(start: tuple[float, float], end: tuple[float, float]) -> Result`
+    - Result dataclass:
+      - `distance_m: float` (horizontal)
+      - `azimuth_mils: float`
 
 ## non-functional requirements
 - Performance: single run <100 ms; API request/response minimal overhead.
@@ -113,7 +101,7 @@ Example scenarios:
 - Security: local-only server (bind 127.0.0.1), no auth, no CORS in production (same-origin).
 
 ## assumptions 
-- 2D horizontal distance is always computed; elevation is optional and only used for slant distance when both Z values are present.
+- 2D horizontal distance is always computed; elevation is not supported.
 - Local grid axes: +x east, +y north.
 - Grid north is assumed equal to true north; azimuths are reported as grid and treated as true for this tool.
 - Distances ≤ ~4 km so planar approximation is appropriate.
@@ -158,7 +146,7 @@ Example scenarios:
 - Echo parsed inputs when `--json` is used.
 - Persisted start storage: platform-appropriate config path (Windows: `%APPDATA%/pop_fly/config.json`; macOS: `~/Library/Application Support/pop_fly/config.json`; Linux: `$XDG_CONFIG_HOME/pop_fly/config.json` or `~/.config/pop_fly/config.json`).
 - When a persisted start exists and `--start` is omitted, use saved start; if neither is present, return a clear error.
-- When a persisted start includes Z and an `--end` with Z is provided, compute slant/ΔZ; otherwise compute horizontal only.
+- Persisted start is 2D only.
 
 ## web ui ux 
 - Single-page app with a form: Start (E,N,[Z]), End (E,N,[Z]), precision, Save/Use saved start controls.
@@ -185,7 +173,7 @@ Env vars: OPENAI_API_KEY (LLM), PLAN_MODEL, GITHUB_TOKEN/REPOSITORY/EVENT_PATH, 
 ## acceptance criteria 
 - CLI: returns distance (m) and azimuth (mils); with both Z values, returns slant_distance_m and delta_z_m; JSON and human-readable outputs follow rules above; exit code 2 on usage errors; ΔZ sign explicit.
 - API: `POST /api/compute` returns JSON matching the CLI’s JSON structure and rounding; `GET /api/health` and `/api/version` function; invalid inputs return HTTP 400 with message.
-- Web UI: users can enter start/end (with optional Z), set precision, save/use start in localStorage, compute results; human-readable output matches CLI formatting (including signed ΔZ), and optional raw JSON view is correct.
+- Web UI: users can enter start/end, set precision, save/use start in localStorage, compute results; human-readable output matches CLI formatting, and optional raw JSON view is correct.
 - Server runs locally at 127.0.0.1:8000 serving both API and static UI in production.
 
 ## milestones & timeline 

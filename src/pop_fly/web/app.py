@@ -3,12 +3,11 @@ from __future__ import annotations
 import os
 from importlib.metadata import PackageNotFoundError, version as pkg_version
 import subprocess
-from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from ..core import Result, compute_distance_bearing_xy, _parse_pair_mgrs_digits
 
@@ -20,16 +19,18 @@ def _round_distance(value: float, precision: int) -> float:
 
 class ComputeRequest(BaseModel):
     # Accept numbers or strings to preserve leading zeros
-    start: list[float | str] = Field(..., description="[E, N] or [E, N, Z] where E/N are 1-5 digit MGRS digits")
-    end: list[float | str] = Field(..., description="[E, N] or [E, N, Z] where E/N are 1-5 digit MGRS digits")
+    start: list[float | str] = Field(..., description="[E, N] where E/N are 1-5 digit MGRS digits")
+    end: list[float | str] = Field(..., description="[E, N] where E/N are 1-5 digit MGRS digits")
     precision: int = Field(0, ge=0, le=6, description="Decimal places for distances; azimuth uses 1 decimal")
 
     @model_validator(mode="after")
     def check_lengths_and_values(self) -> "ComputeRequest":
         for name, arr in ("start", self.start), ("end", self.end):
-            if len(arr) not in (2, 3):
-                raise ValueError(f"{name} must have 2 or 3 values")
-            for idx, v in enumerate(arr):
+            # Enforce at least two values at schema level (422 on too-short),
+            # but allow extra to be handled as business-rule error (400) in route.
+            if len(arr) < 2:
+                raise ValueError(f"{name} must have at least 2 values [E, N]")
+            for idx, v in enumerate(arr[:2]):
                 try:
                     # Accept numeric strings as well
                     _ = float(v)  # type: ignore[arg-type]
@@ -44,8 +45,6 @@ class ComputeResponse(BaseModel):
     end: list[float]
     distance_m: float
     azimuth_mils: float
-    slant_distance_m: Optional[float] = None
-    delta_z_m: Optional[float] = None
 
 
 app = FastAPI(title="pop_fly API", docs_url="/docs")
@@ -68,6 +67,9 @@ def get_version() -> dict:
 @app.post("/api/compute", response_model=ComputeResponse, response_model_exclude_none=True)
 def compute(req: ComputeRequest) -> ComputeResponse:
     try:
+        # Business rule: exactly two values only (no elevation). Return 400.
+        if len(req.start) != 2 or len(req.end) != 2:
+            raise HTTPException(status_code=400, detail="Start and end must have exactly two values [E, N]; elevation is no longer supported")
         # Build strings for the MGRS-digit parser while preserving leading zeros on E/N.
         def to_mgrs_str(parts: list[float | str]) -> str:
             e_raw = parts[0]
@@ -80,9 +82,6 @@ def compute(req: ComputeRequest) -> ComputeResponse:
             if "." in n_token:
                 n_token = n_token.split(".")[0]
             s = f"{e_token} {n_token}"
-            if len(parts) == 3:
-                # Z can be float
-                s += f" {float(parts[2])}"
             return s
 
         start_t = _parse_pair_mgrs_digits(to_mgrs_str(list(req.start)))
@@ -93,15 +92,12 @@ def compute(req: ComputeRequest) -> ComputeResponse:
 
     precision = req.precision
     payload = {
-    "format": "mgrs-digits",
+        "format": "mgrs-digits",
         "start": list(start_t),
         "end": list(end_t),
         "distance_m": _round_distance(res.distance_m, precision),
         "azimuth_mils": round(res.azimuth_mils, 1),
     }
-    if res.slant_distance_m is not None and res.delta_z_m is not None:
-        payload["slant_distance_m"] = _round_distance(res.slant_distance_m, precision)
-        payload["delta_z_m"] = _round_distance(res.delta_z_m, precision)
 
     return ComputeResponse(**payload)
 
