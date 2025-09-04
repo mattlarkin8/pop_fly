@@ -4,6 +4,14 @@ import { ComputeResponse, computeApi } from './api'
 
 const LS_KEY = 'pop_fly/saved-start'
 
+type Pair = [number | string, number | string]
+
+function isPair(v: unknown): v is Pair {
+  return Array.isArray(v) && v.length === 2 &&
+    (typeof v[0] === 'string' || typeof v[0] === 'number') &&
+    (typeof v[1] === 'string' || typeof v[1] === 'number')
+}
+
 function parseNum(v: string): number | undefined {
   if (v.trim() === '') return undefined
   const n = Number(v)
@@ -23,7 +31,7 @@ export default function App() {
   const [endN, setEndN] = useState('')
   const [precision, setPrecision] = useState(0)
   const [useSavedStart, setUseSavedStart] = useState(true)
-  const [savedStart, setSavedStart] = useState<[number | string, number | string] | null>(null)
+  const [savedStart, setSavedStart] = useState<Pair | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<ComputeResponse | null>(null)
@@ -43,32 +51,32 @@ export default function App() {
     }
   }, [])
 
-  const startArray = useMemo<[number | string, number | string] | []>(() => {
+  const startArray = useMemo<Pair | null>(() => {
     const eStr = startE.trim()
     const nStr = startN.trim()
     if (eStr !== '' && nStr !== '') {
       return [eStr, nStr]
     }
-    return []
+    return null
   }, [startE, startN])
 
-  const endArray = useMemo<[number | string, number | string] | []>(() => {
+  const endArray = useMemo<Pair | null>(() => {
     const eStr = endE.trim()
     const nStr = endN.trim()
     if (eStr !== '' && nStr !== '') {
       return [eStr, nStr]
     }
-    return []
+    return null
   }, [endE, endN])
 
-  const effectiveStart = useMemo<[number | string, number | string] | []>(() => {
-    if (useSavedStart && startArray.length < 2 && savedStart) {
+  const effectiveStart = useMemo<Pair | null>(() => {
+    if (useSavedStart && (startArray === null) && savedStart) {
       return savedStart
     }
     return startArray
   }, [useSavedStart, startArray, savedStart])
 
-  const canCompute = effectiveStart.length === 2 && endArray.length === 2
+  const canCompute = effectiveStart !== null && endArray !== null
 
   const onCompute = async () => {
     setError(null)
@@ -79,7 +87,8 @@ export default function App() {
     }
     setBusy(true)
     try {
-      const res = await computeApi({ start: effectiveStart as any, end: endArray as any, precision })
+  // effectiveStart and endArray are narrowed by canCompute
+  const res = await computeApi({ start: effectiveStart as Pair, end: endArray as Pair, precision })
       setResult(res)
     } catch (e: any) {
       setError(e?.message || 'Request failed')
@@ -96,12 +105,12 @@ export default function App() {
   }
 
   const onSaveStart = () => {
-  if (startArray.length < 2) {
+  if (!isPair(startArray)) {
       setError('Cannot save start: please enter at least E and N.')
       return
     }
   localStorage.setItem(LS_KEY, JSON.stringify(startArray))
-  setSavedStart(startArray as any)
+  setSavedStart(startArray)
   }
 
   const hr = result
@@ -136,7 +145,6 @@ export default function App() {
                 <Form.Control value={startN} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setStartN(e.target.value)} placeholder="N" />
               </Form.Group>
             </Col>
-            
           </Row>
           <div className="mt-2 d-flex gap-2">
             <Button variant="secondary" onClick={onSaveStart}>Save start</Button>
@@ -164,7 +172,6 @@ export default function App() {
                 <Form.Control value={endN} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEndN(e.target.value)} placeholder="N" />
               </Form.Group>
             </Col>
-            
           </Row>
         </Col>
       </Row>
