@@ -41,17 +41,21 @@ export default function App() {
     const raw = localStorage.getItem(LS_KEY)
     if (raw) {
       try {
-        const arr = JSON.parse(raw) as unknown
-        if (Array.isArray(arr) && arr.length === 2) {
-          // Normalize displayed fields to strings
-          setStartE((arr[0] as any)?.toString() ?? '')
-          setStartN((arr[1] as any)?.toString() ?? '')
-          // Use type guard to set savedStart safely; fall back to string pair
-          if (isPair(arr)) {
-            setSavedStart(arr)
-          } else {
-            setSavedStart([ (arr[0] as any)?.toString() ?? '', (arr[1] as any)?.toString() ?? '' ])
-          }
+            const arr = JSON.parse(raw) as unknown
+            if (Array.isArray(arr) && arr.length === 2) {
+              // Safely extract values and normalize to strings for inputs
+              const raw0 = arr[0]
+              const raw1 = arr[1]
+              const s0 = (typeof raw0 === 'string' || typeof raw0 === 'number') ? String(raw0) : ''
+              const s1 = (typeof raw1 === 'string' || typeof raw1 === 'number') ? String(raw1) : ''
+              setStartE(s0)
+              setStartN(s1)
+              // Use type guard to set savedStart safely; fall back to normalized string pair
+              if (isPair(arr)) {
+                setSavedStart(arr)
+              } else {
+                setSavedStart([s0, s1])
+              }
         }
       } catch {}
     }
