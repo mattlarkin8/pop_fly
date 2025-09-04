@@ -35,14 +35,11 @@ class TestCore(unittest.TestCase):
         self.assertEqual(r.distance_m, 0.0)
         self.assertAlmostEqual(r.azimuth_mils, 0.0, places=6)
 
-    def test_with_elevation(self):
-        r = compute_distance_bearing_xy((0, 0, 10), (3000, 0, 20))
-        self.assertAlmostEqual(r.distance_m, 3000.0, places=6)
-        self.assertAlmostEqual(r.azimuth_mils, 1600.0, places=6)
-        self.assertIsNotNone(r.slant_distance_m)
-        self.assertIsNotNone(r.delta_z_m)
-        self.assertAlmostEqual(r.delta_z_m or 0.0, 10.0, places=6)
-        self.assertAlmostEqual(r.slant_distance_m or 0.0, math.sqrt(3000**2 + 10**2), places=6)
+    def test_reject_three_value_pairs(self):
+        with self.assertRaises(ValueError):
+            compute_distance_bearing_xy((0, 0, 10), (3000, 0))
+        with self.assertRaises(ValueError):
+            compute_distance_bearing_xy((0, 0), (3000, 0, 20))
 
 
 if __name__ == "__main__":

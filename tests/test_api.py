@@ -34,15 +34,11 @@ class TestAPI(unittest.TestCase):
         self.assertNotIn("slant_distance_m", data)
         self.assertNotIn("delta_z_m", data)
 
-    def test_compute_with_z(self):
-        payload = {"start": ["00000", "00000", 10], "end": ["03000", "00000", 20], "precision": 0}
+    def test_compute_rejects_three_values(self):
+        payload = {"start": ["00000", "00000", 10], "end": ["03000", "00000"], "precision": 0}
         r = self.client.post("/api/compute", json=payload)
-        self.assertEqual(r.status_code, 200)
-        data = r.json()
-        self.assertEqual(data["distance_m"], 3000)
-        self.assertIn("slant_distance_m", data)
-        self.assertIn("delta_z_m", data)
-        self.assertEqual(data["delta_z_m"], 10)
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("elevation", r.json().get("detail", "").lower())
 
     def test_invalid_input(self):
         payload = {"start": [0], "end": [1, 2]}

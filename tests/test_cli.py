@@ -36,24 +36,28 @@ class TestCLI(unittest.TestCase):
         self.assertIn("Azimuth:", out)
         self.assertNotIn("ΔZ:", out)
 
-    def test_with_z_signed_delta(self):
-        self.assertEqual(self.run_cli(["--set-start", "00000,00000,5"])[0], 0)
-        code, out = self.run_cli(["--end", "00000 00000 25", "--precision", "0"])  # 20 m up
-        self.assertEqual(code, 0)
-        self.assertIn("ΔZ: +20 m", out)
+    def test_reject_three_value_inputs(self):
+        # set-start with 3 values should error
+        code, out = self.run_cli(["--set-start", "00000,00000,5"])  
+        self.assertEqual(code, 2)
+        self.assertIn("Expected 'E N'", out)
+        # compute with 3-value end should error
+        self.assertEqual(self.run_cli(["--set-start", "00000,00000"])[0], 0)
+        code, out = self.run_cli(["--end", "00000 00000 25"]) 
+        self.assertEqual(code, 2)
+        self.assertIn("Expected 'E N'", out)
 
     def test_json_output(self):
-        self.assertEqual(self.run_cli(["--set-start", "00000 00000 0"])[0], 0)
-        code, out = self.run_cli(["--end", "03000 00000 10", "--json", "--precision", "0"])
+        self.assertEqual(self.run_cli(["--set-start", "00000 00000"])[0], 0)
+        code, out = self.run_cli(["--end", "03000 00000", "--json", "--precision", "0"])
         self.assertEqual(code, 0)
         data = json.loads(out)
         self.assertEqual(data["format"], "mgrs-digits")
-        self.assertEqual(data["start"], [0.0, 0.0, 0.0])
-        self.assertEqual(data["end"], [3000.0, 0.0, 10.0])
+        self.assertEqual(data["start"], [0.0, 0.0])
+        self.assertEqual(data["end"], [3000.0, 0.0])
         self.assertEqual(data["distance_m"], 3000)
-        self.assertIn("slant_distance_m", data)
-        self.assertIn("delta_z_m", data)
-        self.assertAlmostEqual(data["delta_z_m"], 10.0, places=6)
+        self.assertNotIn("slant_distance_m", data)
+        self.assertNotIn("delta_z_m", data)
 
 
 if __name__ == "__main__":

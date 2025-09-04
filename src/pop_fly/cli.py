@@ -4,9 +4,7 @@ import argparse
 import json
 import os
 import sys
-from dataclasses import asdict
 from pathlib import Path
-from typing import Tuple
 
 from .core import Result, _parse_pair_mgrs_digits, compute_distance_bearing_xy
 
@@ -33,20 +31,20 @@ def _config_path() -> Path:
     return base / "pop_fly" / "config.json"
 
 
-def _load_saved_start() -> tuple[float, float] | tuple[float, float, float] | None:
+def _load_saved_start() -> tuple[float, float] | None:
     path = _config_path()
     try:
         if path.is_file():
             data = json.loads(path.read_text(encoding="utf-8"))
             start = data.get("start")
-            if isinstance(start, list) and len(start) in (2, 3):
-                return tuple(float(x) for x in start)  # type: ignore[return-value]
+            if isinstance(start, list) and len(start) == 2:
+                return (float(start[0]), float(start[1]))
     except Exception:
         pass
     return None
 
 
-def _save_start(start: tuple[float, float] | tuple[float, float, float]) -> None:
+def _save_start(start: tuple[float, float]) -> None:
     path = _config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"start": list(start)}
@@ -62,16 +60,11 @@ def _clear_start() -> None:
             pass
 
 
-def _format_signed(value: float, precision: int = 0) -> str:
-    sign = "+" if value >= 0 else "-"
-    return f"{sign}{abs(value):.{precision}f}"
-
-
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="pop_fly", description="Distance and azimuth calculator (MGRS digits only; optional Z)")
-    parser.add_argument("--start", type=str, help="Quoted 'EEE,NNN' or 'EEE,NNN,Z' (1-5 digit E/N; Z in meters)", required=False)
-    parser.add_argument("--end", type=str, help="Quoted 'EEE,NNN' or 'EEE,NNN,Z' (1-5 digit E/N; Z in meters)", required=False)
-    parser.add_argument("--set-start", dest="set_start", type=str, help="Persist a default start 'EEE,NNN' or 'EEE,NNN,Z'", required=False)
+    parser = argparse.ArgumentParser(prog="pop_fly", description="Distance and azimuth calculator (MGRS digits only; two values E,N)")
+    parser.add_argument("--start", type=str, help="Quoted 'EEE,NNN' (1-5 digit E/N)", required=False)
+    parser.add_argument("--end", type=str, help="Quoted 'EEE,NNN' (1-5 digit E/N)", required=False)
+    parser.add_argument("--set-start", dest="set_start", type=str, help="Persist a default start 'EEE,NNN' (two values only)", required=False)
     parser.add_argument("--clear-start", action="store_true", help="Clear persisted start")
     parser.add_argument("--show-start", action="store_true", help="Show persisted start if present")
     parser.add_argument("--json", action="store_true", help="Output JSON")
@@ -102,8 +95,8 @@ def main(argv: list[str] | None = None) -> int:
         if not (args.start or args.end):
             return 0
 
-    start_tuple: tuple[float, float] | tuple[float, float, float] | None = None
-    end_tuple: tuple[float, float] | tuple[float, float, float] | None = None
+    start_tuple: tuple[float, float] | None = None
+    end_tuple: tuple[float, float] | None = None
 
     if args.start:
         try:
@@ -138,19 +131,11 @@ def main(argv: list[str] | None = None) -> int:
             "distance_m": round(res.distance_m, args.precision),
             "azimuth_mils": round(res.azimuth_mils, 1),
         }
-        if res.slant_distance_m is not None and res.delta_z_m is not None:
-            payload["slant_distance_m"] = round(res.slant_distance_m, args.precision)
-            payload["delta_z_m"] = round(res.delta_z_m, args.precision)
         print(json.dumps(payload, indent=2))
     else:
         dist = f"{res.distance_m:.{args.precision}f}"
         az = f"{res.azimuth_mils:.1f}"
-        if res.slant_distance_m is not None and res.delta_z_m is not None:
-            slant = f"{res.slant_distance_m:.{args.precision}f}"
-            dz = _format_signed(res.delta_z_m, args.precision)
-            print(f"Distance: {dist} m | Azimuth: {az} mils | Slant: {slant} m | ΔZ: {dz} m")
-        else:
-            print(f"Distance: {dist} m | Azimuth: {az} mils")
+        print(f"Distance: {dist} m | Azimuth: {az} mils")
 
     return 0
 

@@ -35,21 +35,20 @@
 - POP_FLY_HOST / POP_FLY_PORT: FastAPI `main()` reads these when running the built server.
 
 ## Project-specific conventions & patterns (do not change these without tests)
-- MGRS-digit shorthand parsing: `src/pop_fly/core.py::_parse_pair_mgrs_digits` expands each E/N token (1–5 digit integer string) by scaling to 5-digit meters: scale = 10**(5-len(token)). Example: `"037,050"` -> E=3700 m, N=5000 m. The third token (Z) is treated as meters and NOT scaled. Reference: `_parse_pair_mgrs_digits`.
+- MGRS-digit shorthand parsing: `src/pop_fly/core.py::_parse_pair_mgrs_digits` expands each E/N token (1–5 digit integer string) by scaling to 5-digit meters: scale = 10**(5-len(token)). Example: `"037,050"` -> E=3700 m, N=5000 m. Elevation is not supported.
 - Bearing computation: uses atan2(dx, dy) with north-reference, converted to NATO mils via deg * 6400 / 360. See `_bearing_deg_from_deltas` and `_deg_to_mils`.
 - Rounding rules observed in the repo:
-  - Distances and slant/deltaZ: rounded to `precision` (CLI and API accept `precision` integer).
+  - Distances: rounded to `precision` (CLI and API accept `precision` integer).
   - Azimuth: rounded to one decimal place (0.1 mil) in both CLI and API.
-- Signed delta-Z formatting: CLI uses `_format_signed` to always show explicit `+`/`-` for ΔZ in human output.
 
 ## API contract (FastAPI)
 - POST /api/compute
-  - Body: `{ "start": [E, N] or [E, N, Z], "end": [...], "precision": int }`. E/N may be numeric strings to preserve leading zeros.
-  - Response: JSON with `format`, `start`, `end`, `distance_m`, `azimuth_mils`, optional `slant_distance_m`, `delta_z_m`. See `src/pop_fly/web/app.py::ComputeResponse`.
-  - Validation: 400 on malformed inputs; server code reuses `_parse_pair_mgrs_digits` for canonicalization.
+  - Body: `{ "start": [E, N], "end": [E, N], "precision": int }`. E/N may be numeric strings to preserve leading zeros.
+  - Response: JSON with `format`, `start`, `end`, `distance_m`, `azimuth_mils`. See `src/pop_fly/web/app.py::ComputeResponse`.
+  - Validation: 422 on too-short arrays; 400 when arrays have extra elements (elevation unsupported). Server code reuses `_parse_pair_mgrs_digits` for canonicalization.
 
 ## Tests and verification
-- Core unit tests in `tests/test_core.py` exercise cardinals, zero distance, and elevation cases. Use these to validate any change to math or rounding.
+- Core unit tests in `tests/test_core.py` exercise cardinals and zero distance cases. Use these to validate any change to math or rounding.
 - CLI tests exist in `tests/test_cli.py` and API tests (if added) should target `src/pop_fly/web/app.py` behavior, ensuring rounding parity between CLI and API.
 
 ## Where to look for examples
@@ -72,7 +71,7 @@ Local dev setup (recommended):
 
 ## Small gotchas
 - The library intentionally ignores MGRS zone and 100k letters — inputs are only the numeric digits. Ensure callers provide values in the same implicit 100k grid.
-- Elevation (Z) must be provided for both start and end to compute slant and ΔZ; otherwise only horizontal distance and azimuth are returned.
+- Elevation (Z) is not supported anywhere in the system as of v2.0.0; inputs must be 2D only.
 - Azimuth uses grid-as-true convention; this is documented in PRD and used throughout code/tests.
 
 ## Issue comment safeguards

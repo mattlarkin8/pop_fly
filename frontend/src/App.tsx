@@ -1,10 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Alert, Button, Col, Container, Form, InputGroup, Row, Tab, Tabs } from 'react-bootstrap'
+import { Alert, Button, Col, Container, Form, Row, Tab, Tabs } from 'react-bootstrap'
 import { ComputeResponse, computeApi } from './api'
 
-type Triplet = [number | string, number | string, number?]
-
 const LS_KEY = 'pop_fly/saved-start'
+
+type Pair = [number | string, number | string]
+
+function isPair(v: unknown): v is Pair {
+  return Array.isArray(v) && v.length === 2 &&
+    (typeof v[0] === 'string' || typeof v[0] === 'number') &&
+    (typeof v[1] === 'string' || typeof v[1] === 'number')
+}
 
 function parseNum(v: string): number | undefined {
   if (v.trim() === '') return undefined
@@ -20,13 +26,12 @@ function signFmt(n: number, precision: number) {
 export default function App() {
   const [startE, setStartE] = useState('')
   const [startN, setStartN] = useState('')
-  const [startZ, setStartZ] = useState('')
+  // 2D only
   const [endE, setEndE] = useState('')
   const [endN, setEndN] = useState('')
-  const [endZ, setEndZ] = useState('')
   const [precision, setPrecision] = useState(0)
   const [useSavedStart, setUseSavedStart] = useState(true)
-  const [savedStart, setSavedStart] = useState<(number | string)[] | null>(null)
+  const [savedStart, setSavedStart] = useState<Pair | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<ComputeResponse | null>(null)
@@ -36,62 +41,64 @@ export default function App() {
     const raw = localStorage.getItem(LS_KEY)
     if (raw) {
       try {
-        const arr = JSON.parse(raw) as (number | string)[]
-        if (Array.isArray(arr) && (arr.length === 2 || arr.length === 3)) {
-          setStartE(arr[0]?.toString() ?? '')
-          setStartN(arr[1]?.toString() ?? '')
-          setStartZ((arr[2] ?? '').toString())
-          setSavedStart(arr)
+            const arr = JSON.parse(raw) as unknown
+            if (Array.isArray(arr) && arr.length === 2) {
+              // Safely extract values and normalize to strings for inputs
+              const raw0 = arr[0]
+              const raw1 = arr[1]
+              const s0 = (typeof raw0 === 'string' || typeof raw0 === 'number') ? String(raw0) : ''
+              const s1 = (typeof raw1 === 'string' || typeof raw1 === 'number') ? String(raw1) : ''
+              setStartE(s0)
+              setStartN(s1)
+              // Use type guard to set savedStart safely; fall back to normalized string pair
+              if (isPair(arr)) {
+                setSavedStart(arr)
+              } else {
+                setSavedStart([s0, s1])
+              }
         }
       } catch {}
     }
   }, [])
 
-  const startArray = useMemo<(number | string)[]>(() => {
+  const startArray = useMemo<Pair | null>(() => {
     const eStr = startE.trim()
     const nStr = startN.trim()
-    const zNum = parseNum(startZ)
-    const arr: (number | string)[] = []
     if (eStr !== '' && nStr !== '') {
-      // Preserve leading zeros by sending E/N as strings
-      arr.push(eStr, nStr)
-      if (startZ.trim() !== '' && zNum !== undefined) arr.push(zNum)
+      return [eStr, nStr]
     }
-    return arr
-  }, [startE, startN, startZ])
+    return null
+  }, [startE, startN])
 
-  const endArray = useMemo<(number | string)[]>(() => {
+  const endArray = useMemo<Pair | null>(() => {
     const eStr = endE.trim()
     const nStr = endN.trim()
-    const zNum = parseNum(endZ)
-    const arr: (number | string)[] = []
     if (eStr !== '' && nStr !== '') {
-      // Preserve leading zeros by sending E/N as strings
-      arr.push(eStr, nStr)
-      if (endZ.trim() !== '' && zNum !== undefined) arr.push(zNum)
+      return [eStr, nStr]
     }
-    return arr
-  }, [endE, endN, endZ])
+    return null
+  }, [endE, endN])
 
-  const effectiveStart = useMemo<(number | string)[]>(() => {
-    if (useSavedStart && startArray.length < 2 && savedStart && savedStart.length >= 2) {
+  const effectiveStart = useMemo<Pair | null>(() => {
+    if (useSavedStart && (startArray === null) && savedStart) {
       return savedStart
     }
     return startArray
   }, [useSavedStart, startArray, savedStart])
 
-  const canCompute = effectiveStart.length >= 2 && endArray.length >= 2
+  const canCompute = effectiveStart !== null && endArray !== null
 
   const onCompute = async () => {
     setError(null)
     setResult(null)
     if (!canCompute) {
-      setError('Please enter valid numeric coordinates for start and end (E,N[,Z]).')
+      setError('Please enter valid numeric coordinates for start and end (E,N).')
       return
     }
     setBusy(true)
     try {
-      const res = await computeApi({ start: effectiveStart, end: endArray, precision })
+  // effectiveStart and endArray are narrowed by canCompute
+  const res = await computeApi({ start: effectiveStart as Pair, end: endArray as Pair, precision })
       setResult(res)
     } catch (e: any) {
       setError(e?.message || 'Request failed')
@@ -105,27 +112,21 @@ export default function App() {
     setResult(null)
     setEndE('')
     setEndN('')
-    setEndZ('')
   }
 
   const onSaveStart = () => {
-    if (startArray.length < 2) {
+  if (!isPair(startArray)) {
       setError('Cannot save start: please enter at least E and N.')
       return
     }
-    localStorage.setItem(LS_KEY, JSON.stringify(startArray))
-    setSavedStart(startArray)
+  localStorage.setItem(LS_KEY, JSON.stringify(startArray))
+  setSavedStart(startArray)
   }
 
   const hr = result
     ? (() => {
         const dist = result.distance_m.toFixed(precision)
         const az = result.azimuth_mils.toFixed(1)
-        if (result.slant_distance_m !== undefined && result.delta_z_m !== undefined) {
-          const sl = result.slant_distance_m.toFixed(precision)
-          const dz = signFmt(result.delta_z_m, precision)
-          return `Distance: ${dist} m | Azimuth: ${az} mils | Slant: ${sl} m | ΔZ: ${dz} m`
-        }
         return `Distance: ${dist} m | Azimuth: ${az} mils`
       })()
     : ''
@@ -154,12 +155,6 @@ export default function App() {
                 <Form.Control value={startN} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setStartN(e.target.value)} placeholder="N" />
               </Form.Group>
             </Col>
-            <Col>
-              <Form.Group controlId="startZ">
-                <Form.Label>Elevation Z (m)</Form.Label>
-                <Form.Control value={startZ} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setStartZ(e.target.value)} placeholder="Z (optional)" />
-              </Form.Group>
-            </Col>
           </Row>
           <div className="mt-2 d-flex gap-2">
             <Button variant="secondary" onClick={onSaveStart}>Save start</Button>
@@ -185,12 +180,6 @@ export default function App() {
               <Form.Group controlId="endN">
                 <Form.Label>Northing (digits or meters)</Form.Label>
                 <Form.Control value={endN} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEndN(e.target.value)} placeholder="N" />
-              </Form.Group>
-            </Col>
-            <Col>
-              <Form.Group controlId="endZ">
-                <Form.Label>Elevation Z (m)</Form.Label>
-                <Form.Control value={endZ} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEndZ(e.target.value)} placeholder="Z (optional)" />
               </Form.Group>
             </Col>
           </Row>

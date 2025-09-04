@@ -1,11 +1,11 @@
 # Pop Fly
 
-Distance and azimuth calculator for local MGRS digits (+optional Z) grids.
+Distance and azimuth calculator for local MGRS digits (2D only; no elevation).
 
 Quick usage (after installing into a Python 3.11+ env):
 
 - Set a default start (MGRS digits):
-  pop_fly --set-start "037,050,5"
+  pop_fly --set-start "037,050"
 - Compute between two points (uses saved start when --start omitted):
   pop_fly --end "051 070"
 - JSON output:
@@ -15,11 +15,11 @@ Quick usage (after installing into a Python 3.11+ env):
   pop_fly --clear-start
 
 Inputs:
-- Quoted tuples: "EEE,NNN" or "EEE,NNN,Z" where E/N are 1–5 digit MGRS digits (comma or space separator). Digits are expanded to meters: e.g., 037 → 3700 m, 051 → 5100 m. Z is meters.
+- Quoted pairs: "EEE,NNN" where E/N are 1–5 digit MGRS digits (comma or space separator). Digits are expanded to meters: e.g., 037 → 3700 m, 051 → 5100 m.
 - Units: meters; azimuth output in NATO mils (6400 mils/circle)
 
 Outputs:
-- Distance (m) and azimuth (mils). If both inputs have Z, prints slant distance and ΔZ with explicit sign.
+- Distance (m) and azimuth (mils).
 
 Note: By default on Windows, settings are stored under %APPDATA%/pop_fly/config.json.
 You can override the location for tests via POP_FLY_CONFIG_DIR.
@@ -42,13 +42,14 @@ When the server is running, the API is available by default at `http://127.0.0.1
 - GET `/api/health` → `{ "status": "ok" }`
 - GET `/api/version` → `{ "version": "x.y.z" }`
 - POST `/api/compute`
-  - Body: `{ "start": [E, N] or [E, N, Z], "end": [...], "precision": int }`
-  - E/N may be numeric strings to preserve leading zeros (1–5 digits expanded to meters); Z is meters.
-  - Response: `{ "format": "mgrs-digits", "start": [...], "end": [...], "distance_m": number, "azimuth_mils": number, "slant_distance_m"?: number, "delta_z_m"?: number }`
-  - Rounding: distances (including slant and ΔZ) to `precision` (default 0); azimuth to 0.1 mil.
+  - Body: `{ "start": [E, N], "end": [E, N], "precision": int }`
+  - E/N may be numeric strings to preserve leading zeros (1–5 digits expanded to meters).
+  - Response: `{ "format": "mgrs-digits", "start": [...], "end": [...], "distance_m": number, "azimuth_mils": number }`
+  - Rounding: distances to `precision` (default 0); azimuth to 0.1 mil.
 
 Notes on errors:
-- Schema/shape issues are validated by FastAPI/Pydantic and return HTTP 422.
+- Too few elements in `start`/`end` (e.g., `[E]`) → HTTP 422 (schema validation).
+- Extra elements (e.g., `[E, N, Z]`) → HTTP 400 (elevation is no longer supported).
 - Well-formed requests that fail business rules (e.g., non-digit E/N tokens) return HTTP 400 with a message.
 
 ## Environment variables
