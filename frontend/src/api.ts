@@ -2,6 +2,7 @@ export type ComputeRequest = {
   start: [number | string, number | string]
   end: [number | string, number | string]
   precision?: number
+  faction?: 'nato' | 'ru'
 }
 
 export type ComputeResponse = {
@@ -10,6 +11,7 @@ export type ComputeResponse = {
   end: number[]
   distance_m: number
   azimuth_mils: number
+  faction: 'nato' | 'ru'
 }
 
 export async function computeApi(req: ComputeRequest): Promise<ComputeResponse> {
