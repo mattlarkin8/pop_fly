@@ -55,7 +55,7 @@ def _load_saved_start() -> tuple[float, float] | None:
     if isinstance(start, list) and len(start) == 2:
         try:
             return (float(start[0]), float(start[1]))
-        except Exception:
+        except (ValueError, TypeError):
             return None
     return None
 
