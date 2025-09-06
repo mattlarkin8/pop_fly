@@ -15,9 +15,8 @@ Quick usage (after installing into a Python 3.11+ env):
 - JSON output:
   pop_fly --end "150 300" --json
 - Show/Clear persisted start:
-  pop_fly --show-start
+  pop_fly --show-start   (Shows persisted faction if set.)
   pop_fly --clear-start
-  (Shows persisted faction if set.)
 
 Inputs:
 - Quoted pairs: "EEE,NNN" where E/N are 1–5 digit MGRS digits (comma or space separator). Digits are expanded to meters: e.g., 037 → 3700 m, 051 → 5100 m.
