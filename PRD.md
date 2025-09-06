@@ -153,7 +153,7 @@ Example scenarios:
 - Persisted start is 2D only.
 
 ## web ui ux 
-- Single-page app with a form: Start (E,N), End (E,N), precision, faction selector, Save/Use saved start controls.
+- Single-page app with a form: Start (E,N), End (E,N), precision, faction selector, Save/Use saved start controls. (Elevation [Z] input is not supported, reflecting the existing limitation as of v2.0.0.)
 - Results panel renders human-readable output and optional JSON tab.
 - Invalid inputs highlighted with inline messages.
 - Runs at `http://127.0.0.1:8000/` by default (configurable via POP_FLY_HOST/POP_FLY_PORT).
