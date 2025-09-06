@@ -94,7 +94,7 @@ def compute_distance_bearing_xy(
         mpc = float(mils_per_circle)
     else:
         f = faction.lower()
-        if f in ("nato", "us", "otAN"):
+        if f in ("nato", "us", "otan"):
             mpc = 6400.0
             faction = "nato"
         elif f in ("ru", "russian", "warsaw", "wp"):
