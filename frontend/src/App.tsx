@@ -3,6 +3,7 @@ import { Alert, Button, Col, Container, Form, Row, Tab, Tabs } from 'react-boots
 import { ComputeResponse, computeApi } from './api'
 
 const LS_KEY = 'pop_fly/saved-start'
+const LS_FACTION = 'pop_fly/faction'
 
 type Pair = [number | string, number | string]
 
@@ -30,13 +31,14 @@ export default function App() {
   const [endE, setEndE] = useState('')
   const [endN, setEndN] = useState('')
   const [precision, setPrecision] = useState(0)
+  const [faction, setFaction] = useState<'nato' | 'ru'>('nato')
   const [useSavedStart, setUseSavedStart] = useState(true)
   const [savedStart, setSavedStart] = useState<Pair | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<ComputeResponse | null>(null)
 
-  // Load saved start
+  // Load saved start & faction
   useEffect(() => {
     const raw = localStorage.getItem(LS_KEY)
     if (raw) {
@@ -58,6 +60,10 @@ export default function App() {
               }
         }
       } catch {}
+    }
+    const fac = localStorage.getItem(LS_FACTION)
+    if (fac === 'nato' || fac === 'ru') {
+      setFaction(fac)
     }
   }, [])
 
@@ -98,7 +104,7 @@ export default function App() {
     setBusy(true)
     try {
   // effectiveStart and endArray are narrowed by canCompute
-  const res = await computeApi({ start: effectiveStart as Pair, end: endArray as Pair, precision })
+  const res = await computeApi({ start: effectiveStart as Pair, end: endArray as Pair, precision, faction })
       setResult(res)
     } catch (e: any) {
       setError(e?.message || 'Request failed')
@@ -126,8 +132,9 @@ export default function App() {
   const hr = result
     ? (() => {
         const dist = result.distance_m.toFixed(precision)
-        const az = result.azimuth_mils.toFixed(1)
-        return `Distance: ${dist} m | Azimuth: ${az} mils`
+  const az = result.azimuth_mils.toFixed(1)
+  const sys = result.faction === 'nato' ? '6400' : '6000'
+  return `Distance: ${dist} m | Azimuth: ${az} mils (${result.faction.toUpperCase()} ${sys})`
       })()
     : ''
 
@@ -196,6 +203,19 @@ export default function App() {
               value={precision}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPrecision(Math.max(0, Math.min(6, Number(e.target.value))))}
             />
+          </Form.Group>
+        </Col>
+        <Col md={4}>
+          <Form.Group controlId="faction">
+            <Form.Label>Faction (mils system)</Form.Label>
+            <Form.Select value={faction} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+              const val = e.currentTarget.value as 'nato' | 'ru'
+              setFaction(val)
+              localStorage.setItem(LS_FACTION, val)
+            }}>
+              <option value="nato">NATO (6400)</option>
+              <option value="ru">RU / Warsaw (6000)</option>
+            </Form.Select>
           </Form.Group>
         </Col>
       </Row>

@@ -22,6 +22,7 @@ class ComputeRequest(BaseModel):
     start: list[float | str] = Field(..., description="[E, N] where E/N are 1-5 digit MGRS digits")
     end: list[float | str] = Field(..., description="[E, N] where E/N are 1-5 digit MGRS digits")
     precision: int = Field(0, ge=0, le=6, description="Decimal places for distances; azimuth uses 1 decimal")
+    faction: str = Field("nato", description="'nato' (6400 mils) or 'ru' (6000 mils)")
 
     @model_validator(mode="after")
     def check_lengths_and_values(self) -> "ComputeRequest":
@@ -45,6 +46,7 @@ class ComputeResponse(BaseModel):
     end: list[float]
     distance_m: float
     azimuth_mils: float
+    faction: str
 
 
 app = FastAPI(title="pop_fly API", docs_url="/docs")
@@ -86,7 +88,7 @@ def compute(req: ComputeRequest) -> ComputeResponse:
 
         start_t = _parse_pair_mgrs_digits(to_mgrs_str(list(req.start)))
         end_t = _parse_pair_mgrs_digits(to_mgrs_str(list(req.end)))
-        res: Result = compute_distance_bearing_xy(start_t, end_t)  # type: ignore[arg-type]
+        res: Result = compute_distance_bearing_xy(start_t, end_t, faction=req.faction)  # type: ignore[arg-type]
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -95,8 +97,9 @@ def compute(req: ComputeRequest) -> ComputeResponse:
         "format": "mgrs-digits",
         "start": list(start_t),
         "end": list(end_t),
-        "distance_m": _round_distance(res.distance_m, precision),
-        "azimuth_mils": round(res.azimuth_mils, 1),
+    "distance_m": _round_distance(res.distance_m, precision),
+    "azimuth_mils": round(res.azimuth_mils, 1),
+    "faction": res.faction,
     }
 
     return ComputeResponse(**payload)

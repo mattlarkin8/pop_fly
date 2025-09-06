@@ -9,6 +9,8 @@ from typing import Tuple
 class Result:
     distance_m: float
     azimuth_mils: float
+    # Which mil system was used (e.g., "nato"=6400, "ru"=6000)
+    faction: str = "nato"
 
 
 def _parse_pair_mgrs_digits(value: str) -> Tuple[float, float]:
@@ -49,14 +51,29 @@ def _bearing_deg_from_deltas(dx: float, dy: float) -> float:
     return b
 
 
-def _deg_to_mils(deg: float) -> float:
-    return deg * 6400.0 / 360.0
+def _deg_to_mils(deg: float, mils_per_circle: float = 6400.0) -> float:
+    return deg * mils_per_circle / 360.0
 
 
 def compute_distance_bearing_xy(
     start: Tuple[float, float],
     end: Tuple[float, float],
+    *,
+    faction: str = "nato",
+    mils_per_circle: float | None = None,
 ) -> Result:
+    """Compute horizontal distance and azimuth in mils.
+
+    Parameters
+    ----------
+    start, end: (E, N) coordinate pairs (meters)
+    faction: "nato" (6400 mils) or "ru" (6000 mils). Case-insensitive.
+    mils_per_circle: Override mils per circle explicitly (takes precedence over faction when provided).
+
+    Returns
+    -------
+    Result with distance and azimuth_mils appropriate to the specified system.
+    """
     if len(start) != 2 or len(end) != 2:
         raise ValueError("Start and end must be (E,N) pairs with two values each")
 
@@ -71,9 +88,25 @@ def compute_distance_bearing_xy(
     dy = n2 - n1
     horizontal = hypot(dx, dy)
     bearing_deg = _bearing_deg_from_deltas(dx, dy)
-    azimuth_mils = _deg_to_mils(bearing_deg)
+    # Determine mils per circle
+    mpc: float
+    if mils_per_circle is not None:
+        mpc = float(mils_per_circle)
+    else:
+        f = faction.lower()
+        if f in ("nato", "us", "otAN"):
+            mpc = 6400.0
+            faction = "nato"
+        elif f in ("ru", "russian", "warsaw", "wp"):
+            mpc = 6000.0
+            faction = "ru"
+        else:
+            raise ValueError("Unsupported faction; expected 'nato' or 'ru'")
+
+    azimuth_mils = _deg_to_mils(bearing_deg, mpc)
 
     return Result(
         distance_m=horizontal,
         azimuth_mils=azimuth_mils,
+        faction=faction,
     )

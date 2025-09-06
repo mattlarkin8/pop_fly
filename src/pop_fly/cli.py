@@ -31,24 +31,49 @@ def _config_path() -> Path:
     return base / "pop_fly" / "config.json"
 
 
-def _load_saved_start() -> tuple[float, float] | None:
+def _load_config() -> dict:
     path = _config_path()
     try:
         if path.is_file():
-            data = json.loads(path.read_text(encoding="utf-8"))
-            start = data.get("start")
-            if isinstance(start, list) and len(start) == 2:
-                return (float(start[0]), float(start[1]))
+            return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
-        pass
+        return {}
+    return {}
+
+
+def _save_config(new_data: dict) -> None:
+    path = _config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    existing = _load_config()
+    existing.update(new_data)
+    path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+
+
+def _load_saved_start() -> tuple[float, float] | None:
+    data = _load_config()
+    start = data.get("start")
+    if isinstance(start, list) and len(start) == 2:
+        try:
+            return (float(start[0]), float(start[1]))
+        except Exception:
+            return None
     return None
 
 
 def _save_start(start: tuple[float, float]) -> None:
-    path = _config_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"start": list(start)}
-    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    _save_config({"start": list(start)})
+
+
+def _load_saved_faction() -> str | None:
+    data = _load_config()
+    fac = data.get("faction")
+    if isinstance(fac, str) and fac.lower() in {"nato", "ru"}:
+        return fac.lower()
+    return None
+
+
+def _save_faction(faction: str) -> None:
+    _save_config({"faction": faction.lower()})
 
 
 def _clear_start() -> None:
@@ -69,6 +94,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--show-start", action="store_true", help="Show persisted start if present")
     parser.add_argument("--json", action="store_true", help="Output JSON")
     parser.add_argument("--precision", type=int, default=0, help="Decimal places for distances (default 0); azimuth mils uses 1")
+    parser.add_argument("--faction", type=str, choices=["nato", "ru"], help="Select mil system for this run (overrides persisted)")
+    parser.add_argument("--set-faction", dest="set_faction", type=str, choices=["nato", "ru"], help="Persist default faction (nato|ru)")
 
     args = parser.parse_args(argv)
 
@@ -79,10 +106,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.show_start:
         saved = _load_saved_start()
-        if saved is None:
-            print("No persisted start found.")
+        fac_saved = _load_saved_faction()
+        if saved is None and fac_saved is None:
+            print("No persisted start/faction found.")
         else:
-            print(f"Persisted start: {saved}")
+            if saved is not None:
+                print(f"Persisted start: {saved}")
+            if fac_saved is not None:
+                print(f"Persisted faction: {fac_saved}")
         # continue if compute requested
 
     if args.set_start:
@@ -93,6 +124,11 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         _save_start(start)
         if not (args.start or args.end):
+            return 0
+
+    if args.set_faction:
+        _save_faction(args.set_faction)
+        if not (args.start or args.end or args.set_start):
             return 0
 
     start_tuple: tuple[float, float] | None = None
@@ -121,7 +157,9 @@ def main(argv: list[str] | None = None) -> int:
         print("Error: missing --end")
         return 2
 
-    res: Result = compute_distance_bearing_xy(start_tuple, end_tuple)
+    # Resolve faction: CLI arg > persisted > default nato
+    faction = args.faction or _load_saved_faction() or "nato"
+    res: Result = compute_distance_bearing_xy(start_tuple, end_tuple, faction=faction)
 
     if args.json:
         payload = {
@@ -130,12 +168,14 @@ def main(argv: list[str] | None = None) -> int:
             "end": list(end_tuple),
             "distance_m": round(res.distance_m, args.precision),
             "azimuth_mils": round(res.azimuth_mils, 1),
+            "faction": res.faction,
         }
         print(json.dumps(payload, indent=2))
     else:
         dist = f"{res.distance_m:.{args.precision}f}"
         az = f"{res.azimuth_mils:.1f}"
-        print(f"Distance: {dist} m | Azimuth: {az} mils")
+        system = "6400" if res.faction == "nato" else "6000"
+        print(f"Distance: {dist} m | Azimuth: {az} mils ({res.faction.upper()} {system})")
 
     return 0
 

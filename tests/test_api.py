@@ -33,6 +33,16 @@ class TestAPI(unittest.TestCase):
         self.assertEqual(data["azimuth_mils"], 1600.0)
         self.assertNotIn("slant_distance_m", data)
         self.assertNotIn("delta_z_m", data)
+        self.assertEqual(data["faction"], "nato")
+
+    def test_compute_ru_faction(self):
+        payload = {"start": ["00000", "00000"], "end": ["03000", "00000"], "precision": 0, "faction": "ru"}
+        r = self.client.post("/api/compute", json=payload)
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertEqual(data["distance_m"], 3000)
+        self.assertEqual(data["azimuth_mils"], 1500.0)
+        self.assertEqual(data["faction"], "ru")
 
     def test_compute_rejects_three_values(self):
         payload = {"start": ["00000", "00000", 10], "end": ["03000", "00000"], "precision": 0}

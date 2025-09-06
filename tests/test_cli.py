@@ -59,6 +59,37 @@ class TestCLI(unittest.TestCase):
         self.assertNotIn("slant_distance_m", data)
         self.assertNotIn("delta_z_m", data)
 
+    def test_faction_flag(self):
+        self.assertEqual(self.run_cli(["--set-start", "00000 00000"])[0], 0)
+        # NATO 3km east = 1600 mils
+        code, out = self.run_cli(["--end", "03000 00000", "--json", "--faction", "nato"])        
+        self.assertEqual(code, 0)
+        nato = json.loads(out)
+        self.assertEqual(nato["azimuth_mils"], 1600.0)
+        self.assertEqual(nato["faction"], "nato")
+        # RU 3km east = 1500 mils
+        code, out = self.run_cli(["--end", "03000 00000", "--json", "--faction", "ru"])        
+        self.assertEqual(code, 0)
+        ru = json.loads(out)
+        self.assertEqual(ru["azimuth_mils"], 1500.0)
+        self.assertEqual(ru["faction"], "ru")
+
+    def test_persisted_faction(self):
+        # Persist start and faction then run without --faction
+        self.assertEqual(self.run_cli(["--set-start", "00000 00000"])[0], 0)
+        self.assertEqual(self.run_cli(["--set-faction", "ru"])[0], 0)
+        code, out = self.run_cli(["--end", "03000 00000", "--json"])  # 3km east
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertEqual(data["faction"], "ru")
+        self.assertEqual(data["azimuth_mils"], 1500.0)
+        # Override with CLI arg
+        code, out = self.run_cli(["--end", "03000 00000", "--json", "--faction", "nato"])  # override
+        self.assertEqual(code, 0)
+        data2 = json.loads(out)
+        self.assertEqual(data2["faction"], "nato")
+        self.assertEqual(data2["azimuth_mils"], 1600.0)
+
 
 if __name__ == "__main__":
     unittest.main()
