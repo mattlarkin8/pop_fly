@@ -1,13 +1,13 @@
 # Pop Fly — Distance & Direction Calculator PRD
 
-Version: 2.1
+Version: 2.2
 Owner: You  
 Date: 2025-09-01
 
 See also: [ROADMAP.md](./ROADMAP.md) for planned features and upcoming milestones.
 
 ## summary
-A Python-based calculator for distance and direction between two points using MGRS numeric inputs (eastings/northings digits only), now with a local web UI and an HTTP API. Scope remains intentionally narrow: input is MGRS digits only for E/N; computation is planar Euclidean; output distance is meters; direction is NATO mils (6400 mils per circle). Elevation is not supported as of v2.0.0. The tool assumes grid north equals true north for azimuth reporting. To keep operation simple and because our maximum computed distance is ≤4,000 m, MGRS zone and 100k grid square letters are intentionally ignored; both points are assumed to be within the same implicit 100k square.
+A Python-based calculator for distance and direction between two points using MGRS numeric inputs (eastings/northings digits only), now with a local web UI and an HTTP API. Scope remains intentionally narrow: input is MGRS digits only for E/N; computation is planar Euclidean; output distance is meters; direction is selectable mil system (NATO 6400 mils or RU/Warsaw 6000 mils per circle). Elevation is not supported as of v2.0.0. The tool assumes grid north equals true north for azimuth reporting. To keep operation simple and because our maximum computed distance is ≤4,000 m, MGRS zone and 100k grid square letters are intentionally ignored; both points are assumed to be within the same implicit 100k square.
 
 Components: 
 - Library: pure Python core function for calculations.
@@ -33,7 +33,7 @@ Example scenarios:
 
 ## scope 
 - Input format: MGRS digits only for eastings and northings (excluding MGRS zone and 100k letters); +x is east, +y is north. Easting and northing components are 1–5 digits each and are expanded to meters by padding to 5 digits (e.g., 037 → 3700 m, 051 → 5100 m). Zone and 100k letters are intentionally ignored given the ≤4 km max range and assumption that both points share the same 100k grid square.
-- Output: distance in meters; azimuth in NATO mils (grid).
+- Output: distance in meters; azimuth in mils (grid) using selected system (default NATO 6400; RU/Warsaw 6000 optional).
 - Interfaces: CLI, importable Python function, local HTTP API, and a Web UI served by the backend.
 - Accuracy target: ≤2 m error for distances ≤4 km under typical conditions.
 
@@ -46,11 +46,11 @@ Example scenarios:
 2. computation (shared by all interfaces)
   - Horizontal distance: `dx = E2 - E1; dy = N2 - N1; distance_m = sqrt(dx^2 + dy^2)`.
   - Bearing (deg): `(atan2(dx, dy) * 180/pi + 360) % 360` (north-referenced; grid assumed ≡ true).
-  - Direction output (mils): `azimuth_mils = deg * 6400 / 360`.
+  - Direction output (mils): `azimuth_mils = deg * (mils_per_circle) / 360`, where `mils_per_circle` is 6400 (NATO) or 6000 (RU/Warsaw).
 
 3. output (all interfaces) 
   - Human-readable: `Distance: 1234 m | Azimuth: 2190 mils`.
-  - JSON: `{ "format": "mgrs-digits", "start": [E1, N1], "end": [E2, N2], "distance_m": 1234.0, "azimuth_mils": 2190.0 }`.
+  - JSON: `{ "format": "mgrs-digits", "start": [E1, N1], "end": [E2, N2], "distance_m": 1234.0, "azimuth_mils": 2190.0, "faction": "nato" | "ru" }`.
   - Rounding rules: distances rounded to `precision` (default 0); azimuth rounded to 0.1 mil.
 
 4. cli interface (existing)
@@ -61,6 +61,8 @@ Example scenarios:
     - `--clear-start` (optional; removes any saved default start)
     - `--show-start` (optional; prints the saved default start, if any)
     - `--json` (optional)
+    - `--faction <nato|ru>` (per-run override of mil system)
+    - `--set-faction <nato|ru>` (persist default mil system)
     - `--precision <int>` (default: meters 0, mils 1)
   - Examples:
   - `pop_fly --set-start "037,050"` (save start once)
@@ -69,7 +71,7 @@ Example scenarios:
 5. http api (new) 
   - Framework: FastAPI; bind local-only (defaults to 127.0.0.1:8000; override with POP_FLY_HOST / POP_FLY_PORT).
   - Endpoints:
-  - `POST /api/compute` → request `{ start: [E, N], end: [E, N], precision?: int }` → response JSON as described above with rounding.
+  - `POST /api/compute` → request `{ start: [E, N], end: [E, N], precision?: int, faction?: "nato"|"ru" }` → response JSON (includes `faction`).
     - `GET /api/health` → `{ "status": "ok" }`.
     - `GET /api/version` → `{ "version": "x.y.z" }`.
   - Validation: start and end must be arrays of length exactly 2; E/N entries must be numeric strings (recommended, to preserve leading zeros) or numbers representing 1–5 digits prior to expansion; values must be finite.
@@ -80,18 +82,20 @@ Example scenarios:
 6. web ui (new) 
   - Stack: React + TypeScript + Vite + React-Bootstrap (Bootstrap 5 CSS).
   - Functionality:
-    - Inputs for Start (E,N) and End (E,N).
+  - Inputs for Start (E,N) and End (E,N).
     - Precision selector.
+  - Faction selector (NATO / RU); persisted in browser localStorage.
     - Save Start to browser localStorage and toggle "Use saved start".
     - Compute calls `POST /api/compute`; display human-readable line and optional raw JSON view.
   - Validation: numeric-only, finite; clear inline error messages.
   - Dev flow: Vite dev server proxies `/api/*` to FastAPI; prod build is served by FastAPI.
 
 7. library api (existing) 
-  - Function: `compute_distance_bearing_xy(start: tuple[float, float], end: tuple[float, float]) -> Result`
+  - Function: `compute_distance_bearing_xy(start: tuple[float, float], end: tuple[float, float], *, faction: str = "nato") -> Result`
     - Result dataclass:
       - `distance_m: float` (horizontal)
       - `azimuth_mils: float`
+      - `faction: str` ("nato" or "ru")
 
 ## non-functional requirements
 - Performance: single run <100 ms; API request/response minimal overhead.
@@ -120,11 +124,11 @@ Example scenarios:
 ### computation (planar)
 - Distance: `sqrt((E2-E1)^2 + (N2-N1)^2)`.
 - Bearing (deg): `(atan2(ΔE, ΔN) * 180/pi + 360) % 360`.
-- Convert to mils: `deg * 6400 / 360`.
+- Convert to mils: `deg * 6400 / 360` (NATO) or `deg * 6000 / 360` (RU), determined by faction.
 
 ### units
 - Distance: meters only.
-- Direction: NATO mils only (6400 per circle).
+- Direction: NATO (6400) or RU/Warsaw (6000) mils based on faction.
 
 ### error handling
 - Missing or malformed inputs → descriptive error (CLI) or HTTP 400 (API).
@@ -144,12 +148,12 @@ Example scenarios:
 ## cli ux 
 - Clear usage/help with examples.
 - Echo parsed inputs when `--json` is used.
-- Persisted start storage: platform-appropriate config path (Windows: `%APPDATA%/pop_fly/config.json`; macOS: `~/Library/Application Support/pop_fly/config.json`; Linux: `$XDG_CONFIG_HOME/pop_fly/config.json` or `~/.config/pop_fly/config.json`).
+- Persisted start & faction storage: platform-appropriate config path (Windows: `%APPDATA%/pop_fly/config.json`; macOS: `~/Library/Application Support/pop_fly/config.json`; Linux: `$XDG_CONFIG_HOME/pop_fly/config.json` or `~/.config/pop_fly/config.json`).
 - When a persisted start exists and `--start` is omitted, use saved start; if neither is present, return a clear error.
 - Persisted start is 2D only.
 
 ## web ui ux 
-- Single-page app with a form: Start (E,N,[Z]), End (E,N,[Z]), precision, Save/Use saved start controls.
+- Single-page app with a form: Start (E,N), End (E,N), precision, faction selector, Save/Use saved start controls.
 - Results panel renders human-readable output and optional JSON tab.
 - Invalid inputs highlighted with inline messages.
 - Runs at `http://127.0.0.1:8000/` by default (configurable via POP_FLY_HOST/POP_FLY_PORT).
@@ -191,9 +195,14 @@ Env vars: OPENAI_API_KEY (LLM), PLAN_MODEL, GITHUB_TOKEN/REPOSITORY/EVENT_PATH, 
 - Distance: `sqrt(ΔE^2 + ΔN^2)`
 - Grid bearing (deg): `(atan2(ΔE, ΔN) * 180/π + 360) % 360`
 - NATO mils: `mils = deg * 6400 / 360`
+- RU/Warsaw mils: `mils = deg * 6000 / 360`
 
 ## examples 
 - Azimuth: `pop_fly --start "037,050" --end "051,070"`
+- RU example with persistence:
+  - `pop_fly --set-start "037,050"`
+  - `pop_fly --set-faction ru`
+  - `pop_fly --end "051,070"`
 - Persisted start workflow:
   - `pop_fly --set-start "037,050"`
   - `pop_fly --end "051,070"`
