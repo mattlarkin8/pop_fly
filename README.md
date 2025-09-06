@@ -1,27 +1,34 @@
 # Pop Fly
 
-Distance and azimuth calculator for local MGRS digits (2D only; no elevation).
+Distance and azimuth calculator for local MGRS digits (2D only; no elevation) with selectable mil systems (NATO 6400 or RU/Warsaw 6000) and persisted faction preference.
 
 Quick usage (after installing into a Python 3.11+ env):
 
 - Set a default start (MGRS digits):
   pop_fly --set-start "037,050"
+- Persist a default faction (NATO 6400 is default; RU/Warsaw 6000 optional):
+  pop_fly --set-faction ru
 - Compute between two points (uses saved start when --start omitted):
   pop_fly --end "051 070"
+- Override faction just for this run:
+  pop_fly --end "051 070" --faction ru
 - JSON output:
   pop_fly --end "150 300" --json
 - Show/Clear persisted start:
-  pop_fly --show-start
+  pop_fly --show-start   (Shows persisted faction if set.)
   pop_fly --clear-start
 
 Inputs:
 - Quoted pairs: "EEE,NNN" where E/N are 1–5 digit MGRS digits (comma or space separator). Digits are expanded to meters: e.g., 037 → 3700 m, 051 → 5100 m.
-- Units: meters; azimuth output in NATO mils (6400 mils/circle)
+- Units: meters; azimuth output in mils using the selected faction:
+  - NATO: 6400 mils / circle (default)
+  - RU / Warsaw: 6000 mils / circle
 
 Outputs:
-- Distance (m) and azimuth (mils).
+- Distance (m) and azimuth (mils). JSON and human-readable output include the `faction` used.
 
 Note: By default on Windows, settings are stored under %APPDATA%/pop_fly/config.json.
+This file now stores both `start` (array) and optional `faction` ("nato" or "ru").
 You can override the location for tests via POP_FLY_CONFIG_DIR.
 
 Web UI (local) — after installing web extras and building the frontend, run:
@@ -42,10 +49,11 @@ When the server is running, the API is available by default at `http://127.0.0.1
 - GET `/api/health` → `{ "status": "ok" }`
 - GET `/api/version` → `{ "version": "x.y.z" }`
 - POST `/api/compute`
-  - Body: `{ "start": [E, N], "end": [E, N], "precision": int }`
+  - Body: `{ "start": [E, N], "end": [E, N], "precision": int, "faction"?: "nato" | "ru" }`
   - E/N may be numeric strings to preserve leading zeros (1–5 digits expanded to meters).
-  - Response: `{ "format": "mgrs-digits", "start": [...], "end": [...], "distance_m": number, "azimuth_mils": number }`
+  - Response: `{ "format": "mgrs-digits", "start": [...], "end": [...], "distance_m": number, "azimuth_mils": number, "faction": "nato" | "ru" }`
   - Rounding: distances to `precision` (default 0); azimuth to 0.1 mil.
+  - If `faction` omitted, defaults to `nato`.
 
 Notes on errors:
 - Too few elements in `start`/`end` (e.g., `[E]`) → HTTP 422 (schema validation).
@@ -100,6 +108,14 @@ Common env vars for automation
 python -m venv .venv
 & .venv\Scripts\Activate.ps1
 python -m pip install -r requirements-dev.txt
+```
+
+### Example end-to-end (RU mils)
+
+```powershell
+pop_fly --set-start "037,050"
+pop_fly --set-faction ru
+pop_fly --end "051 070" --json   # azimuth now in 6000-mil system
 ```
 
 Dry-run behavior & CI
